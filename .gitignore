@@ -1,0 +1,28 @@
+# secrets
+.env
+.env.*
+!.env.example
+.secrets/
+*.json.key
+service-account*.json
+token*.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+dist/
+.next/
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
+
+# app local data
+app/.data/

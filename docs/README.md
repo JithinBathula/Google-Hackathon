@@ -22,6 +22,8 @@ Captured from https://aibuildercup.com and the official T&C on 2026-09-26.
 |---|---|
 | [tech/google-ai-stack.md](tech/google-ai-stack.md) | Which Google AI models, platforms and SDKs qualify, and what each is for |
 | [tech/deployment.md](tech/deployment.md) | Deploying to Cloud Run or Firebase |
+| [tech/drive-connector-design.md](tech/drive-connector-design.md) | How the Google Drive and Calendar connector works, and the OAuth setup |
+| [tech/knowledge-model.md](tech/knowledge-model.md) | The knowledge record types, Firestore layout and extraction pipeline |
 | [tech/resources.md](tech/resources.md) | A directory of every external link |
 
 ## Strategy: our analysis
