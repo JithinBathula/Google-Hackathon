@@ -5,7 +5,7 @@ One file per idea: `docs/ideas/<short-slug>.md`. Copy the template below. Once w
 ## Candidates
 | Idea | Theme | Status | Score (est.) |
 |---|---|---|---|
-| [Knowledge handover for departing knowledge workers](knowledge-handover.md) | Future of Work & Enterprise Productivity | raw | — |
+| [Knowledge handover for departing knowledge workers](knowledge-handover.md) | Future of Work & Enterprise Productivity | chosen | 7.7 |
 
 Status: `raw` → `evaluated` → `shortlisted` → `chosen` / `dropped`
 
