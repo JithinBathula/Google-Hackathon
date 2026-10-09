@@ -98,6 +98,24 @@ def trace(name: str, item_id: str, corpus: Path = typer.Option(Path("fixtures/co
 
 
 @app.command()
+def connect() -> None:
+    """Connect the leaver's Google account (opens the browser once). Token is kept in .secrets/."""
+    from handover.sources.google_auth import connect as run_connect
+
+    email = run_connect()
+    rprint(f"[green]Connected as {email}[/green]")
+
+
+@app.command("seed-google")
+def seed_google(corpus: Path = typer.Option(Path("fixtures/corpus/summit"), exists=True)) -> None:
+    """Put the demo corpus into the connected Google account's Drive and Calendar (re-runnable)."""
+    from handover.sources.seed_google import seed
+
+    links = seed(corpus, log=rprint)
+    rprint(f"[green]seeded {len(links)} files[/green]")
+
+
+@app.command()
 def status(name: str) -> None:
     store = Store(name)
     docs = store.documents()

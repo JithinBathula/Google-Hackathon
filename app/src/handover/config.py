@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     # Verified at https://ai.google.dev/gemini-api/docs/models on 2026-10-08
     gemini_model: str = "gemini-3.8-flash"
 
+    # Google OAuth client (Google Auth Platform → Clients), for Drive and Calendar access
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+
 
 @lru_cache
 def settings() -> Settings:
