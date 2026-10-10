@@ -12,9 +12,13 @@ seen these documents. You read one document at a time and pull out what the succ
 Return:
 - knowledge items, each of one type:
     decision   = something that was chosen (a vendor, a date, a scope, a design)
-    unfinished = work still pending: an approval, an unresolved issue, a plan with no dates
+    unfinished = work still pending: an approval, an unresolved issue, a task not yet done. Fill `due` (ISO date) \
+                 and `owner` (a name) only when the document states them; otherwise leave them null.
     rule       = how things are done here: cadences, freezes, who signs off what, how someone prefers to work
-    background = who or what something is: a person, system, vendor or project the successor must know
+    background = who or what something is. Extract EVERY person and organisation the successor will deal with, \
+                 one item each, with `kind` = person, organisation or thing. For a person, `working_notes` is how \
+                 to work with them, only if the document says so ("call, don't email"); otherwise null.
+    lesson     = something that went wrong before and shaped how things are done now. Only if the document says so.
 - gaps: questions only {leaver} can answer, because the document leaves them open. A decision with no \
 reason, a rule with no reason, an open item with no owner after they leave, a contradiction, or an \
 important thing that is named but never explained.
@@ -62,7 +66,7 @@ class Extraction(BaseModel):
 
 def extract_document(doc: Document, gemini: Gemini, store: Store, leaver: str, role: str, today: str, last_day: str) -> Extraction:
     date = doc.modified_at.date().isoformat() if doc.modified_at else "unknown"
-    system = SYSTEM.format(leaver=leaver, role=role, date=date, today=today, last_day=last_day, max_items=12, max_gaps=5)
+    system = SYSTEM.format(leaver=leaver, role=role, date=date, today=today, last_day=last_day, max_items=15, max_gaps=5)
     prompt = PROMPT.format(title=doc.title, path=doc.path, author=doc.author or "unknown", kind=doc.kind, text=doc.text)
     result = gemini.generate_structured(prompt, Extraction, system=system)
 
