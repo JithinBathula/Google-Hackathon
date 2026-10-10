@@ -1,19 +1,41 @@
-"""Storage: one JSON file per collection under .data/<name>/ (documents, raw_knowledge, raw_gaps, knowledge,
-gaps). Firestore replaces this with the backend."""
+"""Storage: one JSON file per collection under .data/<leaver_id>/ (leaver, documents, raw_knowledge, raw_gaps,
+knowledge, gaps, plus the Google token). Firestore will replace this behind the same methods."""
 
 import json
 from pathlib import Path
 
 from pydantic import BaseModel
 
-from handover.models import Document, Gap, Knowledge, RawGap, RawKnowledge
+from handover.models import Document, Gap, Knowledge, Leaver, RawGap, RawKnowledge
 
 
 class Store:
-    def __init__(self, name: str, data_dir: Path = Path(".data")):
-        """Open .data/<name>/, creating it if needed."""
-        self.dir = data_dir / name
+    def __init__(self, leaver_id: str, data_dir: Path = Path(".data")):
+        """Open .data/<leaver_id>/, creating it if needed."""
+        self.dir = data_dir / leaver_id
         self.dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def list_leavers(data_dir: Path = Path(".data")) -> list[Leaver]:
+        return [Leaver.model_validate_json(p.read_text()) for p in sorted(data_dir.glob("*/leaver.json"))]
+
+    # ---- the leaver and their Google token ----
+    def leaver(self) -> Leaver | None:
+        p = self.dir / "leaver.json"
+        return Leaver.model_validate_json(p.read_text()) if p.exists() else None
+
+    def save_leaver(self, leaver: Leaver) -> None:
+        (self.dir / "leaver.json").write_text(leaver.model_dump_json(indent=1))
+
+    def token(self) -> dict | None:
+        """The leaver's Google OAuth token (refresh token included). Never leaves the server."""
+        p = self.dir / "google-token.json"
+        return json.loads(p.read_text()) if p.exists() else None
+
+    def save_token(self, token: dict) -> None:
+        p = self.dir / "google-token.json"
+        p.write_text(json.dumps(token))
+        p.chmod(0o600)
 
     # ---- documents ----
     def documents(self) -> list[Document]:
@@ -47,6 +69,13 @@ class Store:
 
     def gaps(self) -> list[Gap]:
         return [Gap.model_validate(d) for d in self._read("gaps").values()]
+
+    def get_gap(self, gap_id: str) -> Gap | None:
+        d = self._read("gaps").get(gap_id)
+        return Gap.model_validate(d) if d else None
+
+    def save_gap(self, gap: Gap) -> None:
+        self._upsert("gaps", gap)
 
     def replace_knowledge(self, items: list[Knowledge]) -> None:
         self._write("knowledge", {k.id: k.model_dump(mode="json") for k in items})

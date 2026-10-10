@@ -28,33 +28,56 @@ Stored in `.data/<name>/`: `documents`, `raw_knowledge`, `raw_gaps` (the evidenc
 Files:
 ```
 src/handover/
-  models.py         Document, Knowledge, Gap
-  store.py          the three JSON files
-  sources/local.py  reads a local folder (manifests + calendar.json); the calendar formatter lives here too
-  sources/google_auth.py   one-time OAuth connect; token in .secrets/ (gitignored)
-  sources/google_drive.py  reads the connected account's Drive (Docs, Sheets, Slides) and Calendar
-  sources/seed_google.py   copies a local folder into a test account (only needed to set up a new one)
-  ingest/text.py    cleans Drive's Markdown export
+  models.py         Leaver, Document, RawKnowledge, RawGap, Knowledge, Gap
+  store.py          one JSON file per collection under .data/<leaver_id>/ (Firestore comes with deploy)
+  pipeline.py       sync = read Drive + Calendar, extract what changed, consolidate, audit gaps
+  api.py            the HTTP API (FastAPI); OpenAPI page at /docs
+  cli.py            the same steps by hand: init / connect / sync / ingest / extract / consolidate / show / trace / status
   extract.py        agent 1: per-document extraction into the raw layer
   consolidate.py    agent 2: merge across documents, link, spot contradictions
   audit_gaps.py     agent 3: merge, filter and rank the gaps
   llm/gemini.py     Gemini client
-  cli.py            ingest / extract / consolidate / show / trace / status / connect / seed-google
+  ingest/text.py    cleans Drive's Markdown export
+  sources/google_auth.py   OAuth: consent URL, code exchange, token refresh; token stored per leaver
+  sources/google_drive.py  reads the leaver's Drive (Docs, Sheets, Slides) and Calendar
+  sources/local.py         reads a local folder, for tests without Google; the calendar formatter lives here too
+  sources/seed_google.py   copies a local folder into a test account (only needed to set up a new one)
 ```
 
 The demo data lives in Maya's Drive (mayakestreltest@gmail.com). The story behind it is in [docs/demo/story.md](../docs/demo/story.md).
 
-Run:
+## Run the API
 ```bash
 cd app
 uv sync --extra dev
 cp .env.example .env                 # GEMINI_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-uv run handover connect                      # browser sign-in as the leaver, once; token goes to .secrets/
-uv run handover ingest maya-tan                # reads her Drive and Calendar
-uv run handover extract maya-tan             # agent 1: one Gemini call per document
-uv run handover consolidate maya-tan         # agents 2 and 3: about seven calls
-uv run handover show maya-tan                # merged knowledge and ranked questions
-uv run handover show maya-tan --raw --doc handover-note   # what one document contributed
+uv run uvicorn handover.api:app --port 8080 --reload
+open http://localhost:8080/docs
 ```
 
-`ingest maya-tan --from local --path <folder>` reads a local folder instead, for tests without Google.
+| Method and path | Does |
+|---|---|
+| `POST /leavers` `{name, role, last_day}` | Create the leaver; id is made from the name (`maya-tan`) |
+| `GET /leavers`, `GET /leavers/{id}` | Name, role, last day, connected email, counts, sync state |
+| `GET /auth/google/start?leaver={id}` | Redirect to Google's consent screen; the callback stores the token |
+| `POST /leavers/{id}/sync` | Read Drive and Calendar, extract what changed, consolidate. Background; poll `GET /leavers/{id}` for `sync.state` |
+| `GET /leavers/{id}/documents`, `/documents/{doc_id}` | Documents without text; one document with text and Drive link |
+| `GET /leavers/{id}/knowledge?type=decision` | Merged knowledge, most sources first |
+| `GET /leavers/{id}/gaps?status=open` | Merged gaps |
+| `PATCH /leavers/{id}/gaps/{gap_id}` `{status, answer}` | Stage 2 writes the leaver's answer |
+
+Sync only re-extracts documents whose content changed, and only consolidates if something was extracted.
+
+## The same from the terminal
+```bash
+uv run handover init                         # Maya Tan by default; --name/--role/--last-day for someone else
+uv run handover connect maya-tan             # browser sign-in as the leaver, once
+uv run handover sync maya-tan                # the whole pipeline
+uv run handover show maya-tan                # merged knowledge and questions
+uv run handover show maya-tan --raw --doc handover-note   # what one document contributed
+uv run handover extract maya-tan --force     # re-run agent 1 on everything (after a prompt change), then `consolidate`
+```
+
+`ingest maya-tan --path <folder>` reads a local folder instead of Drive, for tests without Google.
+
+Secrets: `.env` holds the API key and OAuth client; the leaver's Google token is written to `.data/<id>/google-token.json`. Both are gitignored. Testing-mode refresh tokens expire after 7 days, so reconnect before a demo.

@@ -1,4 +1,4 @@
-"""Commands: ingest from Drive, extract per document, consolidate across documents, show what was found."""
+"""Commands for running the pipeline by hand. The API in api.py does the same over HTTP."""
 
 from collections import defaultdict
 from pathlib import Path
@@ -6,99 +6,133 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
+from handover.models import Leaver
 from handover.store import Store
 
 app = typer.Typer(help="Knowledge handover", no_args_is_help=True)
 
 
-@app.command()
-def ingest(
-    name: str,
-    source: str = typer.Option("google", "--from", help="'google' (the connected account's Drive + Calendar) or 'local' (a folder, for tests)"),
-    path: Path = typer.Option(None, exists=True, help="Folder to read, for --from local"),
-    folder: str = typer.Option(None, help="Only this Drive folder, for --from google"),
-) -> None:
-    """Read every document into .data/<name>/documents.json. Unchanged documents are skipped."""
-    if source == "google":
-        from handover.sources.google_drive import read_drive
+def _store(leaver_id: str) -> Store:
+    store = Store(leaver_id)
+    if not store.leaver():
+        raise typer.BadParameter(f"no leaver {leaver_id}; run `handover init` first")
+    return store
 
-        docs = read_drive(folder)
-    elif path:
+
+@app.command()
+def init(
+    name: str = typer.Option("Maya Tan"),
+    role: str = typer.Option("Events & Marketing Coordinator"),
+    last_day: str = typer.Option("2026-11-06"),
+) -> None:
+    """Create the leaver's workspace. The id is made from the name: 'Maya Tan' -> maya-tan."""
+    leaver = Leaver(id=Leaver.make_id(name), name=name, role=role, last_day=last_day)
+    Store(leaver.id).save_leaver(leaver)
+    rprint(f"[green]{leaver.id}[/green] created")
+
+
+@app.command()
+def connect(leaver_id: str) -> None:
+    """Connect the leaver's Google account from the terminal (opens the browser once)."""
+    import webbrowser
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import parse_qs, urlparse
+
+    from handover.sources import google_auth
+
+    store = _store(leaver_id)
+    state, result = "cli", {}
+    url = google_auth.authorization_url(state)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            q = parse_qs(urlparse(self.path).query)
+            ok = urlparse(self.path).path == google_auth.CALLBACK_PATH and q.get("state", [""])[0] == state and "code" in q
+            if ok:
+                result["code"] = q["code"][0]
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Connected. You can close this tab." if ok else b"Old link. Use the latest one in the terminal.")
+
+        def log_message(self, *args) -> None:
+            pass
+
+    port = int(urlparse(google_auth.redirect_uri()).port or 80)
+    server = HTTPServer(("localhost", port), Handler)
+    print(f"Open this URL and sign in as the leaver's account:\n\n{url}\n", flush=True)
+    webbrowser.open(url)
+    while "code" not in result:
+        server.handle_request()
+    server.server_close()
+
+    leaver = store.leaver()
+    leaver.email = google_auth.exchange_code(result["code"], store)
+    store.save_leaver(leaver)
+    rprint(f"[green]Connected as {leaver.email}[/green]")
+
+
+@app.command()
+def sync(leaver_id: str) -> None:
+    """Read Drive and Calendar, extract what changed, consolidate, audit the gaps. Same as POST /leavers/{id}/sync."""
+    from handover.pipeline import sync as run_sync
+
+    run_sync(_store(leaver_id), log=rprint)
+
+
+@app.command()
+def ingest(leaver_id: str, path: Path = typer.Option(None, exists=True, help="Read a local folder instead of Drive")) -> None:
+    """Only the reading step."""
+    from handover.pipeline import ingest as run_ingest
+
+    store = _store(leaver_id)
+    if path:
         from handover.sources.local import read_folder
 
         docs = read_folder(path)
     else:
-        raise typer.BadParameter("--from local needs --path")
+        from handover.sources.google_drive import read_drive
 
-    store = Store(name)
-    new = unchanged = 0
-    for doc in docs:
-        old = store.get_document(doc.id)
-        if old and old.content_hash == doc.content_hash:
-            unchanged += 1
-            continue
-        store.save_document(doc)
-        new += 1
-        rprint(f"  + {doc.path}")
-    rprint(f"[green]{new} documents ingested, {unchanged} unchanged[/green]")
-
-
-LEAVER = typer.Option("Maya Tan")
-ROLE = typer.Option("Events & Marketing Coordinator")
-TODAY = typer.Option("2026-10-09", help="The story's 'today'")
-LAST_DAY = typer.Option("2026-11-06")
+        docs = read_drive(store)
+    changed, unchanged = run_ingest(store, docs, log=rprint)
+    rprint(f"[green]{changed} documents changed, {unchanged} unchanged[/green]")
 
 
 @app.command()
-def extract(
-    name: str,
-    leaver: str = LEAVER,
-    role: str = ROLE,
-    today: str = TODAY,
-    last_day: str = LAST_DAY,
-    limit: int = typer.Option(0, help="Only this many documents (0 = all)"),
-    force: bool = typer.Option(False, help="Re-extract documents already done"),
-) -> None:
-    """Agent 1, the extractor: run Gemini over each document that hasn't been extracted yet (raw layer)."""
-    from handover.extract import extract_document
+def extract(leaver_id: str, force: bool = typer.Option(False, help="Re-extract documents already done")) -> None:
+    """Only agent 1, over documents not yet extracted."""
     from handover.llm.gemini import Gemini
+    from handover.pipeline import extract as run_extract
 
-    store, gemini = Store(name), Gemini()
-    todo = [d for d in store.documents() if force or not d.extracted]
-    todo.sort(key=lambda d: d.path)
-    if limit:
-        todo = todo[:limit]
-    for i, doc in enumerate(todo, 1):
-        try:
-            r = extract_document(doc, gemini, store, leaver, role, today, last_day)
-            rprint(f"[{i}/{len(todo)}] {doc.path}: {len(r.items)} items, {len(r.gaps)} gaps")
-        except Exception as e:
-            rprint(f"[red][{i}/{len(todo)}] {doc.path}: {e}[/red]")
+    store = _store(leaver_id)
+    rprint(f"{run_extract(store, store.leaver(), Gemini(), force=force, log=rprint)} documents extracted")
 
 
 @app.command()
-def consolidate(name: str, leaver: str = LEAVER, role: str = ROLE, today: str = TODAY, last_day: str = LAST_DAY) -> None:
-    """Agents 2 and 3: merge the raw layer into one item per real thing with links, then audit and rank the gaps."""
-    from handover.audit_gaps import audit_gaps
-    from handover.consolidate import consolidate as run_consolidate
+def consolidate(leaver_id: str) -> None:
+    """Only agents 2 and 3."""
     from handover.llm.gemini import Gemini
+    from handover.pipeline import consolidate_all
 
-    store, gemini = Store(name), Gemini()
-    rprint("[bold]consolidator[/bold]")
-    knowledge, contradictions = run_consolidate(store, gemini, leaver, role, today, last_day, log=rprint)
-    rprint("[bold]gap auditor[/bold]")
-    gaps = audit_gaps(store, gemini, knowledge, contradictions, leaver, role, today, last_day, log=rprint)
-    rprint(f"[green]{len(knowledge)} knowledge items, {len(gaps)} gaps[/green]")
+    store = _store(leaver_id)
+    consolidate_all(store, store.leaver(), Gemini(), log=rprint)
+
+
+@app.command()
+def status(leaver_id: str) -> None:
+    store = _store(leaver_id)
+    leaver, docs = store.leaver(), store.documents()
+    rprint(f"{leaver.name}, {leaver.role}, last day {leaver.last_day}, google: {leaver.email or 'not connected'}, sync: {leaver.sync.state}")
+    rprint(f"documents: {len(docs)}  extracted: {sum(d.extracted for d in docs)}  raw: {len(store.raw_knowledge())} items, {len(store.raw_gaps())} gaps  merged: {len(store.knowledge())} items, {len(store.gaps())} gaps")
 
 
 @app.command()
 def show(
-    name: str,
+    leaver_id: str,
     doc: str = typer.Option(None, help="Only items with a source in this document (path substring)"),
     raw: bool = typer.Option(False, help="Show the raw per-document layer instead of the merged one"),
 ) -> None:
     """Print the knowledge and gaps, grouped by type, items with the most sources first."""
-    store = Store(name)
+    store = _store(leaver_id)
     docs = {d.id: d for d in store.documents()}
     if raw:
         _show_raw(store, docs, doc)
@@ -145,50 +179,30 @@ def _show_raw(store: Store, docs: dict, doc: str | None) -> None:
 
 
 @app.command()
-def trace(name: str, item_id: str, corpus: Path = typer.Option(None, help="Local folder, if the documents came from one")) -> None:
-    """Show one knowledge item or gap, and the exact place in the source document it came from."""
-    store = Store(name)
+def trace(leaver_id: str, item_id: str) -> None:
+    """Show one raw item or raw gap and the exact place in its document it came from."""
+    store = _store(leaver_id)
     item = next((x for x in store.raw_knowledge() + store.raw_gaps() if x.id == item_id), None)
     if not item:
-        raise typer.BadParameter(f"no item {item_id}; IDs look like <document>-k0 or <document>-g0")
+        raise typer.BadParameter(f"no raw item {item_id}; IDs look like <document>-k0 or <document>-g0")
     doc = store.get_document(item.document_id)
     rprint(item.model_dump_json(indent=2))
-    rprint(f"\n[bold]source:[/bold] {doc.path}  ({doc.author or '-'}, {doc.modified_at.date() if doc.modified_at else '-'})")
-    file = corpus / doc.path if corpus else None
-    text = file.read_text() if file and file.exists() else doc.text
-    i = text.find(item.quote[:40])
+    rprint(f"\n[bold]source:[/bold] {doc.path}  ({doc.author or '-'}, {doc.modified_at.date() if doc.modified_at else '-'})  {doc.url or ''}")
+    i = doc.text.find(item.quote[:40])
     if i < 0:
         rprint("[yellow]quote not found verbatim in the source[/yellow]")
         return
-    line = text[:i].count("\n") + 1
-    rprint(f"[bold]line {line}:[/bold]")
-    rprint("…" + text[max(0, i - 150) : i] + "[green]" + text[i : i + len(item.quote)] + "[/green]" + text[i + len(item.quote) : i + len(item.quote) + 100] + "…")
-
-
-@app.command()
-def connect() -> None:
-    """Connect the leaver's Google account (opens the browser once). Token is kept in .secrets/."""
-    from handover.sources.google_auth import connect as run_connect
-
-    email = run_connect()
-    rprint(f"[green]Connected as {email}[/green]")
+    rprint(f"[bold]line {doc.text[:i].count(chr(10)) + 1}:[/bold]")
+    rprint("…" + doc.text[max(0, i - 150) : i] + "[green]" + doc.text[i : i + len(item.quote)] + "[/green]" + doc.text[i + len(item.quote) : i + len(item.quote) + 100] + "…")
 
 
 @app.command("seed-google")
-def seed_google(corpus: Path = typer.Option(..., exists=True, help="Folder with _manifest.json files and calendar.json")) -> None:
-    """Put a local folder into the connected Google account's Drive and Calendar (re-runnable). The demo data
-    lives in Maya's Drive now; this is only for seeding another test account."""
+def seed_google(leaver_id: str, corpus: Path = typer.Option(..., exists=True, help="Folder with _manifest.json files and calendar.json")) -> None:
+    """Put a local folder into the leaver's Drive and Calendar (re-runnable). Only for setting up a new demo account."""
     from handover.sources.seed_google import seed
 
-    links = seed(corpus, log=rprint)
+    links = seed(_store(leaver_id), corpus, log=rprint)
     rprint(f"[green]seeded {len(links)} files[/green]")
-
-
-@app.command()
-def status(name: str) -> None:
-    store = Store(name)
-    docs = store.documents()
-    rprint(f"documents: {len(docs)}  extracted: {sum(d.extracted for d in docs)}  raw: {len(store.raw_knowledge())} items, {len(store.raw_gaps())} gaps  merged: {len(store.knowledge())} items, {len(store.gaps())} gaps")
 
 
 if __name__ == "__main__":

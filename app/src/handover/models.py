@@ -13,6 +13,31 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class SyncState(BaseModel):
+    """Progress of the last sync, written on the leaver while it runs."""
+
+    state: Literal["idle", "running", "done", "error"] = "idle"
+    step: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    error: str | None = None
+
+
+class Leaver(BaseModel):
+    """The person leaving. One workspace each: leavers/{id}/..."""
+
+    id: str
+    name: str
+    role: str
+    last_day: str
+    email: str | None = None  # the Google account connected, once it is
+    sync: SyncState = Field(default_factory=SyncState)
+
+    @staticmethod
+    def make_id(name: str) -> str:
+        return "-".join("".join(c if c.isalnum() else " " for c in name.lower()).split())
+
+
 class Document(BaseModel):
     """One file from the leaver's Drive, or one calendar, as plain text."""
 

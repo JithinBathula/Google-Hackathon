@@ -12,6 +12,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
 from handover.sources.google_auth import credentials
+from handover.store import Store
 
 TAG = "handoverSeed"  # marks what we created so a re-run can remove it
 FOLDER = "application/vnd.google-apps.folder"
@@ -19,8 +20,8 @@ DOC = "application/vnd.google-apps.document"
 SHEET = "application/vnd.google-apps.spreadsheet"
 
 
-def seed(corpus: Path, log=print) -> dict[str, str]:
-    creds = credentials()
+def seed(store: Store, corpus: Path, log=print) -> dict[str, str]:
+    creds = credentials(store)
     drive = build("drive", "v3", credentials=creds, cache_discovery=False)
     calendar = build("calendar", "v3", credentials=creds, cache_discovery=False)
 

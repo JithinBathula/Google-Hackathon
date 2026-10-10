@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # Google OAuth client (Google Auth Platform → Clients), for Drive and Calendar access
     google_client_id: str | None = None
     google_client_secret: str | None = None
+    # Where this app is reachable; the OAuth callback is {base_url}/auth/google/callback
+    base_url: str = "http://localhost:8080"
+    # The demo story's "today" (ISO date). Unset = the real date.
+    story_today: str | None = None
 
 
 @lru_cache

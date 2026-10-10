@@ -11,6 +11,7 @@ from handover.ingest.text import clean_markdown
 from handover.models import Document
 from handover.sources.google_auth import credentials
 from handover.sources.local import calendar_document
+from handover.store import Store
 
 FOLDER = "application/vnd.google-apps.folder"
 EXPORT = {  # Drive mime type -> (export format, document kind)
@@ -21,9 +22,9 @@ EXPORT = {  # Drive mime type -> (export format, document kind)
 FIELDS = "nextPageToken, files(id,name,mimeType,parents,owners,modifiedTime,webViewLink)"
 
 
-def read_drive(folder: str | None = None, calendar_months: int = 12) -> Iterator[Document]:
-    """Every Doc, Sheet and Slides file the account owns (optionally only under `folder`), then the calendar."""
-    creds = credentials()
+def read_drive(store: Store, folder: str | None = None, calendar_months: int = 12) -> Iterator[Document]:
+    """Every Doc, Sheet and Slides file the leaver's account owns (optionally only under `folder`), then the calendar."""
+    creds = credentials(store)
     drive = build("drive", "v3", credentials=creds, cache_discovery=False)
     folders = {f["id"]: f for f in _list(drive, f"mimeType='{FOLDER}' and trashed=false")}
     mimes = " or ".join(f"mimeType='{m}'" for m in EXPORT)
