@@ -1,4 +1,4 @@
-"""Stage 1 commands: ingest a folder or the connected Drive, extract knowledge with Gemini, show what was found."""
+"""Commands: ingest from Drive, extract per document, consolidate across documents, show what was found."""
 
 from collections import defaultdict
 from pathlib import Path
@@ -8,7 +8,7 @@ from rich import print as rprint
 
 from handover.store import Store
 
-app = typer.Typer(help="Knowledge handover, stage 1", no_args_is_help=True)
+app = typer.Typer(help="Knowledge handover", no_args_is_help=True)
 
 
 @app.command()
@@ -43,17 +43,23 @@ def ingest(
     rprint(f"[green]{new} documents ingested, {unchanged} unchanged[/green]")
 
 
+LEAVER = typer.Option("Maya Tan")
+ROLE = typer.Option("Events & Marketing Coordinator")
+TODAY = typer.Option("2026-10-09", help="The story's 'today'")
+LAST_DAY = typer.Option("2026-11-06")
+
+
 @app.command()
 def extract(
     name: str,
-    leaver: str = typer.Option("Maya Tan"),
-    role: str = typer.Option("Events & Marketing Coordinator"),
-    today: str = typer.Option("2026-10-09", help="The story's 'today'"),
-    last_day: str = typer.Option("2026-11-06"),
+    leaver: str = LEAVER,
+    role: str = ROLE,
+    today: str = TODAY,
+    last_day: str = LAST_DAY,
     limit: int = typer.Option(0, help="Only this many documents (0 = all)"),
     force: bool = typer.Option(False, help="Re-extract documents already done"),
 ) -> None:
-    """Run Gemini over each document that hasn't been extracted yet."""
+    """Agent 1, the extractor: run Gemini over each document that hasn't been extracted yet (raw layer)."""
     from handover.extract import extract_document
     from handover.llm.gemini import Gemini
 
@@ -71,17 +77,64 @@ def extract(
 
 
 @app.command()
-def show(name: str, doc: str = typer.Option(None, help="Only this document path (substring)")) -> None:
-    """Print the knowledge and gaps found so far, grouped by type."""
+def consolidate(name: str, leaver: str = LEAVER, role: str = ROLE, today: str = TODAY, last_day: str = LAST_DAY) -> None:
+    """Agents 2 and 3: merge the raw layer into one item per real thing with links, then audit and rank the gaps."""
+    from handover.audit_gaps import audit_gaps
+    from handover.consolidate import consolidate as run_consolidate
+    from handover.llm.gemini import Gemini
+
+    store, gemini = Store(name), Gemini()
+    rprint("[bold]consolidator[/bold]")
+    knowledge, contradictions = run_consolidate(store, gemini, leaver, role, today, last_day, log=rprint)
+    rprint("[bold]gap auditor[/bold]")
+    gaps = audit_gaps(store, gemini, knowledge, contradictions, leaver, role, today, last_day, log=rprint)
+    rprint(f"[green]{len(knowledge)} knowledge items, {len(gaps)} gaps[/green]")
+
+
+@app.command()
+def show(
+    name: str,
+    doc: str = typer.Option(None, help="Only items with a source in this document (path substring)"),
+    raw: bool = typer.Option(False, help="Show the raw per-document layer instead of the merged one"),
+) -> None:
+    """Print the knowledge and gaps, grouped by type, items with the most sources first."""
     store = Store(name)
     docs = {d.id: d for d in store.documents()}
-    items = [k for k in store.raw_knowledge() if not doc or doc in docs[k.document_id].path]
-    gaps = [g for g in store.raw_gaps() if not doc or doc in docs[g.document_id].path]
+    if raw:
+        _show_raw(store, docs, doc)
+        return
+    items = [k for k in store.knowledge() if not doc or any(doc in docs[s.document_id].path for s in k.sources)]
+    gaps = [g for g in store.gaps() if not doc or any(doc in docs[s.document_id].path for s in g.sources)]
+    titles = {k.id: k.title for k in store.knowledge()}
 
     by_type = defaultdict(list)
     for k in items:
         by_type[k.type].append(k)
-    for t in ("background", "decision", "unfinished", "rule", "lesson"):
+    for t in ("background", "decision", "rule", "unfinished", "lesson"):
+        rprint(f"\n[bold]{t.upper()} ({len(by_type[t])})[/bold]")
+        for k in sorted(by_type[t], key=lambda k: -len(k.sources)):
+            extra = {f: getattr(k, f) for f in ("why", "kind", "working_notes", "due", "owner") if getattr(k, f)}
+            if t in ("decision", "rule") and not k.why:
+                extra["why"] = "[yellow]not stated[/yellow]"
+            rprint(f"  • {k.title}  [dim]{len(k.sources)} source{'s' if len(k.sources) > 1 else ''} [{k.id}][/dim]\n        {k.details}")
+            for f, v in extra.items():
+                rprint(f"        {f}: {v}")
+            for link in k.links:
+                rprint(f"        [dim]{link.type} → {titles.get(link.target_id, link.target_id)}[/dim]")
+    rprint(f"\n[bold]GAPS ({len(gaps)})[/bold]")
+    for g in sorted(gaps, key=lambda g: -g.priority):
+        about = ", ".join(titles.get(i, i) for i in g.knowledge_ids)
+        status = "" if g.status == "open" else f" [{g.status}]"
+        rprint(f"  {'!' * g.priority:5} {g.question}{status}  [dim]{len(g.sources)} source{'s' if len(g.sources) > 1 else ''} [{g.id}][/dim]\n        {g.why_it_matters}" + (f"\n        [dim]about: {about}[/dim]" if about else ""))
+
+
+def _show_raw(store: Store, docs: dict, doc: str | None) -> None:
+    items = [k for k in store.raw_knowledge() if not doc or doc in docs[k.document_id].path]
+    gaps = [g for g in store.raw_gaps() if not doc or doc in docs[g.document_id].path]
+    by_type = defaultdict(list)
+    for k in items:
+        by_type[k.type].append(k)
+    for t in ("background", "decision", "rule", "unfinished", "lesson"):
         rprint(f"\n[bold]{t.upper()} ({len(by_type[t])})[/bold]")
         for k in by_type[t]:
             why = f"\n    why: {k.why}" if k.why else ("\n    why: [yellow]not stated[/yellow]" if t in ("decision", "rule") else "")

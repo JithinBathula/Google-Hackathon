@@ -10,12 +10,20 @@ Built in stages. Each stage is small enough to read in one sitting.
 | 4. Connect | Google Drive and Calendar via OAuth instead of a local folder | built: `connect`, `seed-google`, `ingest --from google` |
 | 5. Deploy | Firestore + Cloud Run + web UI | later |
 
-## Stage 1
+## Stage 1: three agents
 
-What is stored, in `.data/<name>/`:
-- `documents.json`: one entry per file: title, path, author, date, plain text.
-- `knowledge.json`: items Gemini found. Each has a **type** (decision, unfinished, rule, background), a title, details, **why** (only if the document says), who, when, and a quote.
-- `gaps.json`: questions only the leaver can answer, each with why it matters and the quote that raised it.
+```
+Drive + Calendar ──> documents ──> [1 extractor] ──> raw items, raw gaps ──> [2 consolidator] ──> knowledge (merged, linked)
+                                   one call per doc                          one call per type + one linking call
+                                                                                       │
+                                                        raw gaps + knowledge ──> [3 gap auditor] ──> gaps (merged, ranked)
+```
+
+1. **Extractor** reads one document and pulls out knowledge items (decision, unfinished, rule, background, lesson) and gaps, each with a verbatim quote. Never sees other documents.
+2. **Consolidator** merges the raw items of each type into one item per real thing, keeping every raw item as a source. Then one call over all merged items adds typed links (decided_by, owned_by, about, blocks, follows, supersedes) and raises a gap for any contradiction.
+3. **Gap auditor** takes the raw gaps plus the merged knowledge: drops gaps the knowledge answers, merges duplicates, adds a question for every decision or rule with no stated reason, links each gap to the knowledge it is about, and ranks by priority.
+
+Stored in `.data/<name>/`: `documents`, `raw_knowledge`, `raw_gaps` (the evidence layer), `knowledge` and `gaps` (the merged layer everything downstream reads). On Maya's nine documents: 108 raw items and 23 raw gaps become 37 knowledge items with 49 links and 13 questions.
 
 Files:
 ```
@@ -27,9 +35,11 @@ src/handover/
   sources/google_drive.py  reads the connected account's Drive (Docs, Sheets, Slides) and Calendar
   sources/seed_google.py   copies a local folder into a test account (only needed to set up a new one)
   ingest/text.py    cleans Drive's Markdown export
-  extract.py        the Gemini prompt and the per-document extraction
+  extract.py        agent 1: per-document extraction into the raw layer
+  consolidate.py    agent 2: merge across documents, link, spot contradictions
+  audit_gaps.py     agent 3: merge, filter and rank the gaps
   llm/gemini.py     Gemini client
-  cli.py            ingest / extract / show / trace / status / connect / seed-google
+  cli.py            ingest / extract / consolidate / show / trace / status / connect / seed-google
 ```
 
 The demo data lives in Maya's Drive (mayakestreltest@gmail.com). The story behind it is in [docs/demo/story.md](../docs/demo/story.md).
@@ -41,9 +51,10 @@ uv sync --extra dev
 cp .env.example .env                 # GEMINI_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 uv run handover connect                      # browser sign-in as the leaver, once; token goes to .secrets/
 uv run handover ingest maya-tan                # reads her Drive and Calendar
-uv run handover extract maya-tan             # ~9 Gemini calls, a few cents
-uv run handover show maya-tan
-uv run handover show maya-tan --doc handover-note
+uv run handover extract maya-tan             # agent 1: one Gemini call per document
+uv run handover consolidate maya-tan         # agents 2 and 3: about seven calls
+uv run handover show maya-tan                # merged knowledge and ranked questions
+uv run handover show maya-tan --raw --doc handover-note   # what one document contributed
 ```
 
 `ingest maya-tan --from local --path <folder>` reads a local folder instead, for tests without Google.
