@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class Document(BaseModel):
-    """One file from the leaver's Drive (or, for now, the local corpus), as plain text."""
+    """One file from the leaver's Drive, or one calendar, as plain text."""
 
     id: str
     title: str
@@ -18,6 +18,7 @@ class Document(BaseModel):
     modified_at: datetime | None = None
     text: str
     content_hash: str
+    url: str | None = None  # link back to the file in Drive, when it came from there
     extracted: bool = False
 
     @staticmethod

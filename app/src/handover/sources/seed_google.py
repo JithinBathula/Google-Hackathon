@@ -1,5 +1,6 @@
-"""Seed the demo corpus into the connected Google account: Markdown files become Google Docs, CSVs become
-Google Sheets, in a folder tree mirroring the corpus; calendar.json becomes real Calendar events.
+"""Copy a local folder into the connected Google account: Markdown files become Google Docs, CSVs become
+Google Sheets, in a matching folder tree; calendar.json becomes real Calendar events. Used once to set up the
+demo account; the demo data now lives only there.
 Safe to re-run: everything created earlier by this script is deleted first."""
 
 import contextlib

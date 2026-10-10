@@ -1,10 +1,11 @@
-"""Reads the corpus from a local folder: every file listed in a `_manifest.json`, plus `calendar.json`
-as one document. Stands in for the Drive and Calendar connectors until OAuth is set up."""
+"""Reads documents from a local folder: every file listed in a `_manifest.json`, plus `calendar.json` as one
+document. Only for tests without Google; the real source is `google_drive.py`. `calendar_document` is shared."""
 
 import json
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from handover.ingest.text import clean_markdown
 from handover.models import Document
@@ -62,8 +63,8 @@ def calendar_document(events: list[dict]) -> Document:
 
 
 def _event(e: dict) -> str:
-    start = e["start"].get("dateTime") or e["start"].get("date")
-    end = e.get("end", {}).get("dateTime") or ""
+    start = _local(e["start"])
+    end = _local(e.get("end", {}))
     when = start.replace("T", " ")[:16] + (f" to {end[11:16]}" if "T" in end else "")
     lines = [f"## {e.get('summary', '(no title)')}", f"- When: {when}"]
     if e.get("location"):
@@ -76,3 +77,11 @@ def _event(e: dict) -> str:
     if e.get("description"):
         lines += ["", e["description"].strip()]
     return "\n".join(lines) + "\n"
+
+
+def _local(t: dict) -> str:
+    """An event time as ISO text in the event's own timezone. Google returns UTC plus a timeZone name."""
+    value = t.get("dateTime") or t.get("date") or ""
+    if "T" in value and t.get("timeZone"):
+        return datetime.fromisoformat(value).astimezone(ZoneInfo(t["timeZone"])).isoformat()
+    return value

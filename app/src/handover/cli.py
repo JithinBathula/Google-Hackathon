@@ -1,4 +1,4 @@
-"""Stage 1 commands: ingest a folder, extract knowledge with Gemini, show what was found."""
+"""Stage 1 commands: ingest a folder or the connected Drive, extract knowledge with Gemini, show what was found."""
 
 from collections import defaultdict
 from pathlib import Path
@@ -12,28 +12,43 @@ app = typer.Typer(help="Knowledge handover, stage 1", no_args_is_help=True)
 
 
 @app.command()
-def ingest(name: str, path: Path = typer.Option(..., exists=True, help="Corpus folder")) -> None:
-    """Read every document in the folder into .data/<name>/documents.json."""
-    from handover.sources.local import read_folder
+def ingest(
+    name: str,
+    source: str = typer.Option("google", "--from", help="'google' (the connected account's Drive + Calendar) or 'local' (a folder, for tests)"),
+    path: Path = typer.Option(None, exists=True, help="Folder to read, for --from local"),
+    folder: str = typer.Option(None, help="Only this Drive folder, for --from google"),
+) -> None:
+    """Read every document into .data/<name>/documents.json. Unchanged documents are skipped."""
+    if source == "google":
+        from handover.sources.google_drive import read_drive
+
+        docs = read_drive(folder)
+    elif path:
+        from handover.sources.local import read_folder
+
+        docs = read_folder(path)
+    else:
+        raise typer.BadParameter("--from local needs --path")
 
     store = Store(name)
     new = unchanged = 0
-    for doc in read_folder(path):
+    for doc in docs:
         old = store.get_document(doc.id)
         if old and old.content_hash == doc.content_hash:
             unchanged += 1
             continue
         store.save_document(doc)
         new += 1
+        rprint(f"  + {doc.path}")
     rprint(f"[green]{new} documents ingested, {unchanged} unchanged[/green]")
 
 
 @app.command()
 def extract(
     name: str,
-    leaver: str = typer.Option("Priya Nair"),
-    role: str = typer.Option("Senior Project Manager"),
-    today: str = typer.Option("2026-10-08", help="The story's 'today'"),
+    leaver: str = typer.Option("Maya Tan"),
+    role: str = typer.Option("Events & Marketing Coordinator"),
+    today: str = typer.Option("2026-10-09", help="The story's 'today'"),
     last_day: str = typer.Option("2026-11-06"),
     limit: int = typer.Option(0, help="Only this many documents (0 = all)"),
     force: bool = typer.Option(False, help="Re-extract documents already done"),
@@ -77,7 +92,7 @@ def show(name: str, doc: str = typer.Option(None, help="Only this document path 
 
 
 @app.command()
-def trace(name: str, item_id: str, corpus: Path = typer.Option(Path("fixtures/corpus/kestrel"))) -> None:
+def trace(name: str, item_id: str, corpus: Path = typer.Option(None, help="Local folder, if the documents came from one")) -> None:
     """Show one knowledge item or gap, and the exact place in the source document it came from."""
     store = Store(name)
     item = next((x for x in store.knowledge() + store.gaps() if x.id == item_id), None)
@@ -86,8 +101,8 @@ def trace(name: str, item_id: str, corpus: Path = typer.Option(Path("fixtures/co
     doc = store.get_document(item.document_id)
     rprint(item.model_dump_json(indent=2))
     rprint(f"\n[bold]source:[/bold] {doc.path}  ({doc.author or '-'}, {doc.modified_at.date() if doc.modified_at else '-'})")
-    file = corpus / doc.path
-    text = file.read_text() if file.exists() else doc.text
+    file = corpus / doc.path if corpus else None
+    text = file.read_text() if file and file.exists() else doc.text
     i = text.find(item.quote[:40])
     if i < 0:
         rprint("[yellow]quote not found verbatim in the source[/yellow]")
@@ -107,8 +122,9 @@ def connect() -> None:
 
 
 @app.command("seed-google")
-def seed_google(corpus: Path = typer.Option(Path("fixtures/corpus/summit"), exists=True)) -> None:
-    """Put the demo corpus into the connected Google account's Drive and Calendar (re-runnable)."""
+def seed_google(corpus: Path = typer.Option(..., exists=True, help="Folder with _manifest.json files and calendar.json")) -> None:
+    """Put a local folder into the connected Google account's Drive and Calendar (re-runnable). The demo data
+    lives in Maya's Drive now; this is only for seeding another test account."""
     from handover.sources.seed_google import seed
 
     links = seed(corpus, log=rprint)

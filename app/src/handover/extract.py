@@ -29,6 +29,10 @@ a gap. Never invent a reason.
 unless the document says they are still open. Gaps are about what is still unresolved or unexplained as of today.
 - If a decision picked an option that scored worse, cost more, or contradicts other evidence in the document, \
 the stated reason is probably not the whole story: raise a gap asking what really drove it.
+- A rule or instruction given without a reason ("call, don't email", "do not do X until Y") deserves a gap asking \
+why it exists. The successor will break it the first time it is inconvenient unless they know what it prevents.
+- Do not raise gaps that another document in the same folder would obviously answer, such as a supplier's \
+contact details or a person's full name. Gaps are for things only {leaver} knows.
 """
 
 PROMPT = """Title: {title}
