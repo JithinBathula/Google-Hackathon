@@ -14,7 +14,7 @@ Then the **successor** (or anyone who needs that knowledge) uses the knowledge b
 ## MVP scope decisions (confirmed 2026-10-08)
 | # | Question | Decision |
 |---|---|---|
-| 1 | Demo persona | One fictional company, one leaver (a project manager owning two projects), one successor. Fully synthetic corpus, generated with Gemini and uploaded to a dedicated demo Google account. |
+| 1 | Demo persona | One fictional company (Kestrel), one leaver (Maya Tan, Events & Marketing Coordinator), one successor (Ben Ong). Fully synthetic data, living only in the demo Google account's Drive and Calendar. See [../demo/story.md](../demo/story.md). |
 | 2 | Data sources | **Google Drive and Google Calendar live via OAuth** (same consent flow, one set of scopes). Slack only if time permits. Meeting transcripts live in Drive as documents. |
 | 3 | What "knowledge" is | Typed records in Firestore: **Decisions**, **Entities**, **Open threads**, **Gaps**, **Answers**. Gaps drive stages 2 and 3. |
 | 4 | Org-wide scope | Deferred. One leaver only; org-wide is the roadmap slide. |
@@ -43,10 +43,10 @@ Then the **successor** (or anyone who needs that knowledge) uses the knowledge b
 ## Feasibility in the time left
 - Due 2026-10-18. Stage 1 plus the successor Q&A is the must-have path. Stage 2 and 3 are the differentiators and must be in the demo at least in text form.
 - Data: synthetic only. Nothing from an employer or third party.
-- Biggest technical risk: OAuth consent and Drive ingestion eating the first days. Mitigated by a connector interface that also accepts a local folder, so the pipeline can be built against the generated corpus before the live connector lands.
+- Biggest technical risk was OAuth consent and Drive ingestion eating the first days. Done on 2026-10-10: the pipeline reads straight from the demo account's Drive and Calendar.
 
 ## Rule check
 - [x] Fresh build (no reuse of prior/employer code)
 - [x] Uses Gemini/Gemma or Agent Platform/Antigravity/AI Studio
 - [x] Deployable on Cloud Run/Firebase
-- [x] No third-party IP/confidential data issues (synthetic corpus)
+- [x] No third-party IP/confidential data issues (synthetic data)

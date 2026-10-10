@@ -38,3 +38,4 @@ Captured from https://aibuildercup.com and the official T&C on 2026-09-26.
 | [ideas/README.md](ideas/README.md) | Idea template and list of candidates |
 | [decisions/log.md](decisions/log.md) | Log of decisions made |
 | [team/team.md](team/team.md) | Roster, roles and eligibility checks |
+| [demo/story.md](demo/story.md) | The demo story: Maya, Ben, the Summit, the four planted gaps. The data itself is in Maya's Drive |

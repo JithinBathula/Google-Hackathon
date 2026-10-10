@@ -15,7 +15,7 @@
 | Treat the refresh token as the only secret that grants Drive access; the client ID and secret only identify the app | Store the token in Firestore (encrypted) or Secret Manager, never in the repo. |
 | Request only read scopes: `drive.readonly`, `calendar.readonly`, `openid`, `email` | Least privilege, and it answers the privacy question judges will ask. |
 | Retry with exponential backoff on 429, 5xx, and 403 with a rate-limit reason | Drive rate-limits bursts during a backfill. |
-| Extraction by MIME type: Docs → Markdown export, Sheets → CSV, Slides → plain text, PDFs → text layer, text and Markdown files downloaded as is, everything else title only | Covers the whole corpus with one small table. |
+| Extraction by MIME type: Docs → Markdown export, Sheets → CSV, Slides → plain text, PDFs → text layer, text and Markdown files downloaded as is, everything else title only | Covers a whole Drive with one small table. |
 | Clean Drive's Markdown export: unwrap bold headings, strip quote prefixes and backslash escapes | Drive's export is noisy and it hurts extraction quality. |
 | Take the changes-feed start token **before** the backfill listing, save it only after the batch is applied | Nothing edited mid-backfill is missed, and a crash just redoes the batch. |
 | Content hash per file so unchanged files aren't re-processed | Gemini extraction is the expensive step; skip it when nothing changed. |
@@ -27,7 +27,7 @@
 - **Per-file ACLs and permission-aware search.** There is one leaver and the knowledge base is theirs. Document who can see the knowledge base at the app level instead.
 - **Elasticsearch.** Firestore holds documents, chunks and knowledge records. Vector search via Firestore vector search or Vertex embeddings.
 - **The tamper-evident audit log.** Out of scope for the MVP.
-- **A fixed root folder.** The leaver's corpus is their Drive: files they own or have edited. Allow an optional folder filter for a tidy demo.
+- **A fixed root folder.** The leaver's data is their Drive: files they own or have edited. Allow an optional folder filter for a tidy demo.
 - **Hourly full reconcile.** Backfill plus polling is enough for ten days.
 
 ## Scope difference from the earlier build
@@ -39,11 +39,11 @@ The earlier connector indexed a shared company folder for *search*. Ours indexes
 3. Create a **Web application** OAuth client with redirect URIs for local dev (`http://localhost:8080/auth/google/callback`) and the Cloud Run URL once deployed.
 4. Put the client ID and secret in Secret Manager; expose them to Cloud Run as environment variables.
 
-**Gotcha: in Testing mode refresh tokens expire after 7 days.** `drive.readonly` is a restricted scope, so publishing the consent screen needs Google verification, which won't happen before Oct 18. Mitigations: reconnect the demo account before recording the video, and keep a **pre-ingested demo workspace** so judges never need a live token.
+**Gotcha: in Testing mode refresh tokens expire after 7 days.** `drive.readonly` is a restricted scope, so publishing the consent screen needs Google verification, which won't happen before Oct 18. Mitigations: reconnect the demo account before recording the video, and keep the **extracted knowledge in Firestore** so judges never need a live token.
 
 ## Build order
-1. `Document` model and a `Source` interface, plus a local-folder source so the pipeline can be built against the generated corpus on day one.
-2. OAuth connect flow and token storage.
-3. Drive backfill: walk, extract, normalize, hand off.
+1. ~~`Document` model and a source that reads a local folder, so the pipeline could be built before OAuth was set up.~~ Done 2026-10-09. The local reader stays only for tests without Google.
+2. ~~OAuth connect flow and token storage.~~ Done 2026-10-10 (`sources/google_auth.py`).
+3. ~~Drive backfill: walk, export, normalize, hand off.~~ Done 2026-10-10 (`sources/google_drive.py`). The demo data lives only in the demo account's Drive and Calendar.
 4. Drive poll via the changes feed, with a "sync now" endpoint.
-5. Calendar backfill through the same token.
+5. ~~Calendar backfill through the same token.~~ Done 2026-10-10.

@@ -13,6 +13,12 @@ Newest first. Each entry records what we decided, why, and the alternatives we c
 
 ---
 
+### 2026-10-10: Demo data lives only in the demo Google account
+- **Decision:** The demo persona is Maya Tan, Events & Marketing Coordinator at Kestrel, handing the Summit 2027 to Ben Ong ([../demo/story.md](../demo/story.md)). Her 8 documents and 14 calendar events live only in the demo account's Drive and Calendar. The local fixture copy was deleted; the pipeline reads from Drive by default.
+- **Why:** One source of truth, and the demo shows the real connector rather than a folder on disk. The earlier project-manager persona had too many documents and people for a hackathon demo.
+- **Alternatives considered:** keeping a local copy alongside Drive (rejected: two copies drift).
+- **Revisit if:** the demo account is lost. The seed command can rebuild it from any folder with `_manifest.json` files.
+
 ### 2026-10-08: MVP scope for the knowledge-handover agent
 - **Decision:** Live Google Drive and Calendar connectors via OAuth; Slack deferred. One synthetic persona (a departing project manager). Typed knowledge records in Firestore (Decisions, Entities, Open threads, Gaps, Answers). Org-wide scope deferred. Questioning is event-driven per ingestion batch. Text interview first, voice later. Python + ADK on Cloud Run.
 - **Why:** The Drive connector is low-risk given prior experience, so live data beats a seeded demo. Everything else is cut to fit the Oct 18 deadline.
