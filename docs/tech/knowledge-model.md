@@ -20,4 +20,4 @@ Every item has a title, details, `who`, `when`, a verbatim quote, and `why`. **`
 ## Later stages (not built yet)
 - **Stage 2, Ask:** gaps become questions to the leaver, answers are stored and attached to the item they explain. Items mentioned in several documents get merged so the same question isn't asked twice.
 - **Stage 3, Answer:** the successor asks questions. Items and documents get embeddings so the relevant ones can be found and cited. This is the only place vector search is used.
-- **Backend:** the JSON files move to Firestore, which has vector search built in, behind a FastAPI service. See [backend-plan.md](backend-plan.md).
+- **Deploy:** the JSON files move to Firestore, which has vector search built in. The API is already in `app/src/handover/api.py`.
