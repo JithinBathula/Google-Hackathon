@@ -1,4 +1,10 @@
-"""Stage 1: what we store. Three things: documents, knowledge items and gaps."""
+"""What we store, in two layers.
+
+Raw layer, one record per document: `RawKnowledge` and `RawGap`, exactly what Gemini found in that one
+document, with a verbatim quote. Written by the extractor. Never shown directly; it is the evidence.
+
+Merged layer, one record per real thing: `Knowledge` and `Gap`. Written by the consolidator and the gap
+auditor from the raw layer. Everything downstream (UI, stages 2 and 3) reads this layer."""
 
 from datetime import datetime
 from hashlib import sha256
@@ -26,35 +32,89 @@ class Document(BaseModel):
         return sha256(path.encode()).hexdigest()[:12]
 
 
-KnowledgeType = Literal["decision", "unfinished", "rule", "background"]
+KnowledgeType = Literal["decision", "unfinished", "rule", "background", "lesson"]
+BackgroundKind = Literal["person", "organisation", "thing"]
+LinkType = Literal["decided_by", "owned_by", "about", "blocks", "follows", "supersedes"]
 
 
-class Knowledge(BaseModel):
-    """One piece of knowledge Gemini found in one document.
+class KnowledgeFields(BaseModel):
+    """The fields a knowledge item has in both layers.
 
-    type:     decision   = something that was chosen
-              unfinished = work still pending
-              rule       = how things are done here
-              background = who or what something is: a person, system, vendor or project
-    why:      the reason, only if the document states it. None means "the document doesn't say".
+    type:          decision   = something that was chosen
+                   unfinished = work still pending
+                   rule       = how things are done here
+                   background = who or what something is: a person, organisation or thing
+                   lesson     = something that went wrong before and shaped how things are done now
+    why:           the reason, only if a document states it. None means "the documents don't say".
+    kind:          background only: person, organisation or thing.
+    working_notes: people only: how to work with them ("call, don't email").
+    due, owner:    unfinished only. None means the documents don't say, which is itself a gap.
     """
 
-    id: str
-    document_id: str
     type: KnowledgeType
     title: str
     details: str
     why: str | None = None
     who: list[str] = Field(default_factory=list)
     when: str | None = None
+    kind: BackgroundKind | None = None
+    working_notes: str | None = None
+    due: str | None = None
+    owner: str | None = None
+
+
+class RawKnowledge(KnowledgeFields):
+    """One document's view of one thing, with the quote that supports it."""
+
+    id: str
+    document_id: str
     quote: str
 
 
-class Gap(BaseModel):
-    """A question only the leaver can answer, because the document leaves it open."""
+class RawGap(BaseModel):
+    """A question one document left open."""
 
     id: str
     document_id: str
     question: str
     why_it_matters: str
     quote: str
+
+
+class Source(BaseModel):
+    """Where a merged record came from: one raw record, its document, and its quote."""
+
+    raw_id: str
+    document_id: str
+    quote: str
+
+
+class Link(BaseModel):
+    """A typed edge from one merged knowledge item to another: decided_by a person, about an organisation,
+    blocks an unfinished item, follows a rule, supersedes an older item, owned_by a person."""
+
+    type: LinkType
+    target_id: str
+
+
+class Knowledge(KnowledgeFields):
+    """One real thing, merged from every document that mentions it."""
+
+    id: str
+    sources: list[Source]
+    links: list[Link] = Field(default_factory=list)
+    importance: int = Field(ge=1, le=5, description="5 = the successor must know this")
+
+
+class Gap(BaseModel):
+    """A question only the leaver can answer, merged from every document that raised it.
+    Stage 2 fills in status and answer."""
+
+    id: str
+    question: str
+    why_it_matters: str
+    sources: list[Source]
+    knowledge_ids: list[str] = Field(default_factory=list)
+    priority: int = Field(ge=1, le=5, description="5 = ask this first")
+    status: Literal["open", "answered", "dropped"] = "open"
+    answer: str | None = None

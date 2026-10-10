@@ -1,11 +1,12 @@
-"""Stage 1 storage: three JSON files per workspace under .data/<name>/. Firestore comes at deploy time."""
+"""Storage: one JSON file per collection under .data/<name>/ (documents, raw_knowledge, raw_gaps, knowledge,
+gaps). Firestore replaces this with the backend."""
 
 import json
 from pathlib import Path
 
 from pydantic import BaseModel
 
-from handover.models import Document, Gap, Knowledge
+from handover.models import Document, Gap, Knowledge, RawGap, RawKnowledge
 
 
 class Store:
@@ -28,19 +29,30 @@ class Store:
         """Insert or replace a document, keyed by its id."""
         self._upsert("documents", doc)
 
-    # ---- knowledge and gaps ----
+    # ---- raw layer: what each document said ----
+    def raw_knowledge(self) -> list[RawKnowledge]:
+        return [RawKnowledge.model_validate(d) for d in self._read("raw_knowledge").values()]
+
+    def raw_gaps(self) -> list[RawGap]:
+        return [RawGap.model_validate(d) for d in self._read("raw_gaps").values()]
+
+    def replace_for_document(self, document_id: str, items: list[RawKnowledge], gaps: list[RawGap]) -> None:
+        """Drop this document's old raw knowledge and gaps, then write the new ones."""
+        self._replace("raw_knowledge", document_id, items)
+        self._replace("raw_gaps", document_id, gaps)
+
+    # ---- merged layer: what everything downstream reads ----
     def knowledge(self) -> list[Knowledge]:
-        """Every stored knowledge item."""
         return [Knowledge.model_validate(d) for d in self._read("knowledge").values()]
 
     def gaps(self) -> list[Gap]:
-        """Every stored gap."""
         return [Gap.model_validate(d) for d in self._read("gaps").values()]
 
-    def replace_for_document(self, document_id: str, items: list[Knowledge], gaps: list[Gap]) -> None:
-        """Drop this document's old knowledge and gaps, then write the new ones."""
-        self._replace("knowledge", document_id, items)
-        self._replace("gaps", document_id, gaps)
+    def replace_knowledge(self, items: list[Knowledge]) -> None:
+        self._write("knowledge", {k.id: k.model_dump(mode="json") for k in items})
+
+    def replace_gaps(self, gaps: list[Gap]) -> None:
+        self._write("gaps", {g.id: g.model_dump(mode="json") for g in gaps})
 
     def _replace(self, collection: str, document_id: str, new_records: list[BaseModel]) -> None:
         """In one file, keep every other document's rows, then save this document's new rows."""

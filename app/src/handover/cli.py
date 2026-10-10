@@ -75,13 +75,13 @@ def show(name: str, doc: str = typer.Option(None, help="Only this document path 
     """Print the knowledge and gaps found so far, grouped by type."""
     store = Store(name)
     docs = {d.id: d for d in store.documents()}
-    items = [k for k in store.knowledge() if not doc or doc in docs[k.document_id].path]
-    gaps = [g for g in store.gaps() if not doc or doc in docs[g.document_id].path]
+    items = [k for k in store.raw_knowledge() if not doc or doc in docs[k.document_id].path]
+    gaps = [g for g in store.raw_gaps() if not doc or doc in docs[g.document_id].path]
 
     by_type = defaultdict(list)
     for k in items:
         by_type[k.type].append(k)
-    for t in ("background", "decision", "unfinished", "rule"):
+    for t in ("background", "decision", "unfinished", "rule", "lesson"):
         rprint(f"\n[bold]{t.upper()} ({len(by_type[t])})[/bold]")
         for k in by_type[t]:
             why = f"\n    why: {k.why}" if k.why else ("\n    why: [yellow]not stated[/yellow]" if t in ("decision", "rule") else "")
@@ -95,7 +95,7 @@ def show(name: str, doc: str = typer.Option(None, help="Only this document path 
 def trace(name: str, item_id: str, corpus: Path = typer.Option(None, help="Local folder, if the documents came from one")) -> None:
     """Show one knowledge item or gap, and the exact place in the source document it came from."""
     store = Store(name)
-    item = next((x for x in store.knowledge() + store.gaps() if x.id == item_id), None)
+    item = next((x for x in store.raw_knowledge() + store.raw_gaps() if x.id == item_id), None)
     if not item:
         raise typer.BadParameter(f"no item {item_id}; IDs look like <document>-k0 or <document>-g0")
     doc = store.get_document(item.document_id)
@@ -135,7 +135,7 @@ def seed_google(corpus: Path = typer.Option(..., exists=True, help="Folder with 
 def status(name: str) -> None:
     store = Store(name)
     docs = store.documents()
-    rprint(f"documents: {len(docs)}  extracted: {sum(d.extracted for d in docs)}  knowledge: {len(store.knowledge())}  gaps: {len(store.gaps())}")
+    rprint(f"documents: {len(docs)}  extracted: {sum(d.extracted for d in docs)}  raw: {len(store.raw_knowledge())} items, {len(store.raw_gaps())} gaps  merged: {len(store.knowledge())} items, {len(store.gaps())} gaps")
 
 
 if __name__ == "__main__":

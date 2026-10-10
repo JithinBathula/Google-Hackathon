@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 
 from handover.llm.gemini import Gemini
-from handover.models import Document, Gap, Knowledge, KnowledgeType
+from handover.models import Document, KnowledgeFields, RawGap, RawKnowledge
 from handover.store import Store
 
 SYSTEM = """You are helping hand over the work of {leaver}, {role}, who is leaving. Their successor has never \
@@ -45,13 +45,7 @@ Type: {kind}
 --- END ---"""
 
 
-class Item(BaseModel):
-    type: KnowledgeType
-    title: str
-    details: str
-    why: str | None = None
-    who: list[str] = Field(default_factory=list)
-    when: str | None = None
+class Item(KnowledgeFields):
     quote: str
 
 
@@ -72,8 +66,8 @@ def extract_document(doc: Document, gemini: Gemini, store: Store, leaver: str, r
     prompt = PROMPT.format(title=doc.title, path=doc.path, author=doc.author or "unknown", kind=doc.kind, text=doc.text)
     result = gemini.generate_structured(prompt, Extraction, system=system)
 
-    items = [Knowledge(id=f"{doc.id}-k{i}", document_id=doc.id, **it.model_dump()) for i, it in enumerate(result.items)]
-    gaps = [Gap(id=f"{doc.id}-g{i}", document_id=doc.id, **g.model_dump()) for i, g in enumerate(result.gaps)]
+    items = [RawKnowledge(id=f"{doc.id}-k{i}", document_id=doc.id, **it.model_dump()) for i, it in enumerate(result.items)]
+    gaps = [RawGap(id=f"{doc.id}-g{i}", document_id=doc.id, **g.model_dump()) for i, g in enumerate(result.gaps)]
     store.replace_for_document(doc.id, items, gaps)
     doc.extracted = True
     store.save_document(doc)
