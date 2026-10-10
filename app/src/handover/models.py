@@ -103,7 +103,6 @@ class Knowledge(KnowledgeFields):
     id: str
     sources: list[Source]
     links: list[Link] = Field(default_factory=list)
-    importance: int = Field(ge=1, le=5, description="5 = the successor must know this")
 
 
 class Gap(BaseModel):
