@@ -63,7 +63,7 @@ def get_leaver(leaver_id: str) -> LeaverView:
 
 
 # ---- Google connect ----
-_oauth_states: dict[str, str] = {}  # state -> leaver id, for the few minutes a consent screen is open
+_oauth_states: dict[str, tuple[str, str]] = {}  # state -> (leaver id, PKCE verifier) while a consent screen is open
 
 
 @app.get("/auth/google/start")
@@ -71,19 +71,20 @@ def google_start(leaver: str) -> RedirectResponse:
     """Send the leaver to Google's consent screen."""
     _store(leaver)
     state = secrets.token_urlsafe(16)
-    _oauth_states[state] = leaver
-    return RedirectResponse(google_auth.authorization_url(state))
+    url, verifier = google_auth.authorization_url(state)
+    _oauth_states[state] = (leaver, verifier)
+    return RedirectResponse(url)
 
 
 @app.get("/auth/google/callback", response_class=HTMLResponse)
 def google_callback(state: str = "", code: str = "", error: str = "") -> str:
     """Google sends the user back here. Keep the token, remember the email, show a plain confirmation."""
-    leaver_id = _oauth_states.pop(state, None)
+    leaver_id, verifier = _oauth_states.pop(state, (None, None))
     if not leaver_id or not code:
         raise HTTPException(400, error or "This sign-in came from an old link. Start again.")
     store = _store(leaver_id)
     leaver = store.leaver()
-    leaver.email = google_auth.exchange_code(code, store)
+    leaver.email = google_auth.exchange_code(code, verifier, store)
     store.save_leaver(leaver)
     return f"<p style='font:16px system-ui;margin:40px'>Connected {leaver.email} for {leaver.name}. You can close this tab.</p>"
 

@@ -42,7 +42,7 @@ def connect(leaver_id: str) -> None:
 
     store = _store(leaver_id)
     state, result = "cli", {}
-    url = google_auth.authorization_url(state)
+    url, verifier = google_auth.authorization_url(state)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
@@ -66,7 +66,7 @@ def connect(leaver_id: str) -> None:
     server.server_close()
 
     leaver = store.leaver()
-    leaver.email = google_auth.exchange_code(result["code"], store)
+    leaver.email = google_auth.exchange_code(result["code"], verifier, store)
     store.save_leaver(leaver)
     rprint(f"[green]Connected as {leaver.email}[/green]")
 

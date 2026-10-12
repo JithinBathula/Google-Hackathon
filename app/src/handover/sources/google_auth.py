@@ -37,15 +37,18 @@ def _flow() -> Flow:
     return Flow.from_client_config(config, scopes=SCOPES, redirect_uri=redirect_uri())
 
 
-def authorization_url(state: str) -> str:
-    """The Google consent URL. prompt=consent makes Google return a refresh token even on a repeat approval."""
-    url, _ = _flow().authorization_url(access_type="offline", prompt="consent", state=state, include_granted_scopes="true")
-    return url
+def authorization_url(state: str) -> tuple[str, str]:
+    """The Google consent URL and its PKCE code verifier, which the caller keeps until the callback.
+    prompt=consent makes Google return a refresh token even on a repeat approval."""
+    flow = _flow()
+    url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state, include_granted_scopes="true")
+    return url, flow.code_verifier
 
 
-def exchange_code(code: str, store: Store) -> str:
+def exchange_code(code: str, code_verifier: str, store: Store) -> str:
     """Trade the callback's code for tokens, keep them in the store, return the account's email."""
     flow = _flow()
+    flow.code_verifier = code_verifier
     flow.fetch_token(code=code)
     creds = flow.credentials
     if not creds.refresh_token:
