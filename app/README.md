@@ -8,7 +8,7 @@ Built in stages. Each stage is small enough to read in one sitting.
 | 2. Ask | Turn gaps into questions for the leaver; save their answers | next |
 | 3. Answer | Successor asks questions; search over the knowledge and documents (this is where embeddings come in) | later |
 | 4. Connect | Google Drive and Calendar via OAuth instead of a local folder | built: `connect`, `seed-google`, `ingest --from google` |
-| 5. Deploy | Firestore + Cloud Run + web UI | later |
+| 5. Deploy | Firestore + Cloud Run, UI and API in one container | built: `./deploy.sh` |
 
 ## Stage 1: three agents
 
@@ -29,9 +29,10 @@ Files:
 ```
 src/handover/
   models.py         Leaver, Document, RawKnowledge, RawGap, Knowledge, Gap
-  store.py          one JSON file per collection under .data/<leaver_id>/ (Firestore comes with deploy)
+  store.py          JSON files under .data/<leaver_id>/ locally, Firestore on Cloud Run (STORE=firestore)
   pipeline.py       sync = read Drive + Calendar, extract what changed, consolidate, audit gaps
   api.py            the HTTP API (FastAPI); OpenAPI page at /docs
+  server.py         what Cloud Run runs: the API under /api, the built UI at /
   cli.py            the same steps by hand: init / connect / sync / ingest / extract / consolidate / show / trace / status
   extract.py        agent 1: per-document extraction into the raw layer
   consolidate.py    agent 2: merge across documents, link, spot contradictions
@@ -81,3 +82,25 @@ uv run handover extract maya-tan --force     # re-run agent 1 on everything (aft
 `ingest maya-tan --path <folder>` reads a local folder instead of Drive, for tests without Google.
 
 Secrets: `.env` holds the API key and OAuth client; the leaver's Google token is written to `.data/<id>/google-token.json`. Both are gitignored. Testing-mode refresh tokens expire after 7 days, so reconnect before a demo.
+
+## Deploy (Cloud Run)
+
+```bash
+./deploy.sh        # from the repo root: builds the Dockerfile on Cloud Build, deploys the service, prints the URL
+```
+
+The live app is `https://handover-239830814657.asia-southeast1.run.app` (project `gen-lang-client-0288239915`,
+region `asia-southeast1`). One container: the UI at `/`, the API at `/api` (OpenAPI at `/api/docs`). On Cloud Run it
+stores everything in Firestore, calls Gemini through Vertex AI as the `handover-app` service account (no API key;
+`gemini-3.8-flash` is served from the `global` location), and reads the OAuth client secret from Secret Manager.
+It runs one instance with CPU always on, because a sync keeps working after its request returns.
+
+One-time setup, already done for the project above:
+1. Enable the APIs: run, cloudbuild, artifactregistry, firestore, secretmanager, aiplatform, drive, calendar-json.
+2. `gcloud firestore databases create --location=asia-southeast1`
+3. Service account `handover-app` with `roles/datastore.user`, `roles/aiplatform.user`, `roles/secretmanager.secretAccessor`.
+4. Secret `google-client-secret` holding the OAuth client secret.
+5. In Google Auth Platform → Clients, add the redirect URI `https://<service url>/api/auth/google/callback`.
+
+`uv run handover push-firestore maya-tan` copies a local `.data/` workspace (Google token included) into Firestore,
+so the deployed app starts with data without re-running Gemini.

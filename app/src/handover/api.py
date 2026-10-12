@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from handover.models import Document, Gap, Knowledge, KnowledgeType, Leaver
 from handover.pipeline import sync
 from handover.sources import google_auth
-from handover.store import Store
+from handover.store import Store, open_store
+from handover.store import list_leavers as stored_leavers
 
 app = FastAPI(title="Handover", description="Knowledge handover for a departing teammate.")
 
@@ -31,7 +32,7 @@ class LeaverView(Leaver):
 
 
 def _store(leaver_id: str) -> Store:
-    store = Store(leaver_id)
+    store = open_store(leaver_id)
     if not store.leaver():
         raise HTTPException(404, f"no leaver {leaver_id}")
     return store
@@ -45,7 +46,7 @@ def _view(store: Store) -> LeaverView:
 
 @app.post("/leavers", response_model=LeaverView)
 def create_leaver(body: NewLeaver) -> LeaverView:
-    store = Store(Leaver.make_id(body.name))
+    store = open_store(Leaver.make_id(body.name))
     if not store.leaver():
         store.save_leaver(Leaver(id=Leaver.make_id(body.name), **body.model_dump()))
     return _view(store)
@@ -53,7 +54,7 @@ def create_leaver(body: NewLeaver) -> LeaverView:
 
 @app.get("/leavers", response_model=list[LeaverView])
 def list_leavers() -> list[LeaverView]:
-    return [_view(Store(x.id)) for x in Store.list_leavers()]
+    return [_view(open_store(x.id)) for x in stored_leavers()]
 
 
 @app.get("/leavers/{leaver_id}", response_model=LeaverView)

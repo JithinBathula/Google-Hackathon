@@ -13,6 +13,12 @@ Newest first. Each entry records what we decided, why, and the alternatives we c
 
 ---
 
+### 2026-10-12: Deploy as one Cloud Run container with Firestore and Vertex AI
+- **Decision:** One Cloud Run service in `asia-southeast1` serves the built UI at `/` and the API at `/api`. Data lives in Firestore behind the existing `Store` methods (`STORE=firestore`). Gemini is called through Vertex AI as a service account, from the `global` location, because `gemini-3.8-flash` isn't served in `asia-southeast1`. The OAuth client secret is in Secret Manager. Single instance, CPU always on.
+- **Why:** One URL for judges and no CORS. One instance with CPU always on is the simplest way to keep background syncs running and the in-memory OAuth state valid, with no task queue.
+- **Alternatives considered:** Firebase Hosting for the UI plus Cloud Run for the API (two deploys); Cloud Tasks or Cloud Run Jobs for sync (more moving parts).
+- **Revisit if:** we need more than one instance. The OAuth state and sync would then have to move out of process memory.
+
 ### 2026-10-10: Demo data lives only in the demo Google account
 - **Decision:** The demo persona is Maya Tan, Events & Marketing Coordinator at Kestrel, handing the Summit 2027 to Ben Ong ([../demo/story.md](../demo/story.md)). Her 8 documents and 14 calendar events live only in the demo account's Drive and Calendar. The local fixture copy was deleted; the pipeline reads from Drive by default.
 - **Why:** One source of truth, and the demo shows the real connector rather than a folder on disk. The earlier project-manager persona had too many documents and people for a hackathon demo.

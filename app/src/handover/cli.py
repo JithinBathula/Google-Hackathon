@@ -7,13 +7,13 @@ import typer
 from rich import print as rprint
 
 from handover.models import Leaver
-from handover.store import Store
+from handover.store import Store, open_store
 
 app = typer.Typer(help="Knowledge handover", no_args_is_help=True)
 
 
 def _store(leaver_id: str) -> Store:
-    store = Store(leaver_id)
+    store = open_store(leaver_id)
     if not store.leaver():
         raise typer.BadParameter(f"no leaver {leaver_id}; run `handover init` first")
     return store
@@ -27,7 +27,7 @@ def init(
 ) -> None:
     """Create the leaver's workspace. The id is made from the name: 'Maya Tan' -> maya-tan."""
     leaver = Leaver(id=Leaver.make_id(name), name=name, role=role, last_day=last_day)
-    Store(leaver.id).save_leaver(leaver)
+    open_store(leaver.id).save_leaver(leaver)
     rprint(f"[green]{leaver.id}[/green] created")
 
 
@@ -203,6 +203,18 @@ def seed_google(leaver_id: str, corpus: Path = typer.Option(..., exists=True, he
 
     links = seed(_store(leaver_id), corpus, log=rprint)
     rprint(f"[green]seeded {len(links)} files[/green]")
+
+
+@app.command("push-firestore")
+def push_firestore(leaver_id: str) -> None:
+    """Copy a leaver's local .data/ (Google token included) into Firestore, so the deployed app starts with it."""
+    from handover.store import FirestoreStore
+
+    local = Store(leaver_id)
+    if not local.leaver():
+        raise typer.BadParameter(f"no local leaver {leaver_id}")
+    local.copy_to(FirestoreStore(leaver_id))
+    rprint(f"[green]{leaver_id}[/green] copied to Firestore")
 
 
 if __name__ == "__main__":

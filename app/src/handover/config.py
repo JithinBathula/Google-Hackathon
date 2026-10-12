@@ -1,6 +1,7 @@
 """Settings from the environment or app/.env (never committed)."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,9 +12,16 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     google_genai_use_vertexai: bool = False
     google_cloud_project: str | None = None
-    google_cloud_location: str = "asia-southeast1"
+    # gemini-3.8-flash is served on Vertex from "global", not asia-southeast1 (checked 2026-10-12)
+    google_cloud_location: str = "global"
     # Verified at https://ai.google.dev/gemini-api/docs/models on 2026-10-08
     gemini_model: str = "gemini-3.8-flash"
+
+    # "files" keeps everything under .data/ (local); "firestore" is for Cloud Run
+    store: Literal["files", "firestore"] = "files"
+    firestore_database: str = "(default)"
+    # The built UI (ui/dist). When set, the server serves it at / and the API at /api
+    ui_dir: str | None = None
 
     # Google OAuth client (Google Auth Platform → Clients), for Drive and Calendar access
     google_client_id: str | None = None
