@@ -56,3 +56,6 @@ export interface Leaver {
 }
 
 export interface CheckResponse { sufficient: boolean; message: string; follow_up: string | null; gap: Gap }
+
+export interface ChatTurn { role: "user" | "assistant"; text: string }
+export interface AskAnswer { answer: string; cited_ids: string[]; follow_ups: string[] }

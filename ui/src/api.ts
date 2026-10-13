@@ -1,4 +1,4 @@
-import type { CheckResponse, Doc, Gap, HandoverState, InterviewAnswerResponse, InterviewState, Knowledge, Leaver } from "./types";
+import type { AskAnswer, ChatTurn, CheckResponse, Doc, Gap, HandoverState, InterviewAnswerResponse, InterviewState, Knowledge, Leaver } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "/api";
 
@@ -51,5 +51,39 @@ export const api = {
       method: "PATCH", headers: { "content-type": "application/json" },
       body: JSON.stringify({ status: "answered", answer }),
     }),
+  ask: (id: string, body: { question: string; history: ChatTurn[]; successor?: string }) =>
+    mutate<AskAnswer>(`/leavers/${id}/ask`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }),
+  /** The chat answer as Gemini writes it: onText gets each new piece; resolves with the sources and follow-ups. */
+  askStream: async (id: string, body: { question: string; history: ChatTurn[]; successor?: string }, onText: (text: string) => void) => {
+    const r = await fetch(`${BASE}/leavers/${id}/ask/stream`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!r.ok || !r.body) {
+      const detail = await r.json().catch(() => null);
+      throw new Error(detail?.detail ?? `${r.status} ask`);
+    }
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let end: { cited_ids: string[]; follow_ups: string[] } = { cited_ids: [], follow_ups: [] };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      for (let i = buffer.indexOf("\n"); i >= 0; i = buffer.indexOf("\n")) {
+        const line = buffer.slice(0, i).trim();
+        buffer = buffer.slice(i + 1);
+        if (!line) continue;
+        const event = JSON.parse(line);
+        if (event.error) throw new Error(event.error);
+        if (event.text) onText(event.text);
+        else if (event.cited_ids) end = event;
+      }
+    }
+    return end;
+  },
+  mcpUrl: () => new URL((import.meta.env.VITE_MCP_URL as string | undefined) ?? "/mcp", location.href).href,
   connectUrl: (id: string) => `${BASE}/auth/google/start?leaver=${id}`,
 };

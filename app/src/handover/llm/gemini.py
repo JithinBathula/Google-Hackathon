@@ -44,6 +44,15 @@ class Gemini:
                 time.sleep(min(30, 2**attempt) + random.random())
         raise RuntimeError("unreachable")
 
+    def stream_text(self, prompt, system: str | None = None, temperature: float = 0.2):
+        """Yield the response text piece by piece as Gemini writes it. Low thinking: for a chat, the first words in
+        about 2s matter more than deeper reasoning (about 10s at the default, measured 2026-10-13)."""
+        config = types.GenerateContentConfig(system_instruction=system, temperature=temperature,
+                                             thinking_config=types.ThinkingConfig(thinking_level="low"))
+        for chunk in self.client.models.generate_content_stream(model=self.model, contents=prompt, config=config):
+            if chunk.text:
+                yield chunk.text
+
     def synthesize_speech(self, text: str) -> bytes:
         """Generate a single-speaker Gemini TTS response and return browser-ready WAV bytes."""
         s = settings()

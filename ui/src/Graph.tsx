@@ -1,124 +1,205 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject } from "react-force-graph-2d";
 import type { Gap, Knowledge } from "./types";
-import { COLORS, colorOf } from "./theme";
+import { COLORS } from "./theme";
 
-export interface GNode extends NodeObject { id: string; label: string; color: string; size: number; group: string; item?: Knowledge; gap?: Gap }
+// The board view is laid out, not simulated: one island per kind of knowledge, pills in columns, so labels never
+// overlap. Top row is what to know and do, bottom row is who and what it involves.
+const ROWS: string[][] = [["unfinished", "decision", "rule", "lesson"], ["person", "organisation", "thing"]];
+export const ISLAND_TITLES: Record<string, string> = {
+  unfinished: "Unfinished work", decision: "Decisions", rule: "How things are done", lesson: "Lessons learned",
+  person: "People", organisation: "Organisations", thing: "Things & places",
+};
+const PILL_W = 236, PILL_H = 28, GAP = 8, COL_GAP = 10, PAD = 16, TITLE = 34, ISLAND_GAP = 36, PER_COL = 7;
+
+export interface GNode extends NodeObject { id: string; label: string; color: string; group: string; item: Knowledge; answered: boolean }
 interface GLink { source: string; target: string; type: string }
+interface Island { group: string; x: number; y: number; w: number; h: number; count: number }
 
-interface Props {
-  knowledge: Knowledge[]; gaps: Gap[]; hidden: Set<string>;
+export interface MapProps {
+  knowledge: Knowledge[]; gaps: Gap[]; query: string;
   selected: string | null; onSelect: (id: string | null) => void;
 }
 
-export function Graph({ knowledge, gaps, hidden, selected, onSelect }: Props) {
-  const ref = useRef<ForceGraphMethods<GNode, GLink>>();
+// the graph library swaps link ends from ids to node objects once it has run
+export const end = (v: unknown) => (typeof v === "string" ? v : (v as { id: string }).id);
+export const groupOf = (k: Knowledge) => (k.type === "background" ? k.kind ?? "thing" : k.type);
+export const answeredIds = (gaps: Gap[]) => new Set(gaps.filter((g) => g.status === "answered").flatMap((g) => g.knowledge_ids));
+export const matchesQuery = (k: Knowledge, q: string) => `${k.title} ${k.details} ${k.who.join(" ")}`.toLowerCase().includes(q);
+
+/** Keeps a canvas the size of its box. */
+export function useBoxSize() {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
-  const [hover, setHover] = useState<string | null>(null);
-
   useEffect(() => {
     const el = box.current!;
     const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  return { box, size };
+}
 
-  const data = useMemo(() => {
-    const nodes: GNode[] = [];
-    const links: GLink[] = [];
-    for (const k of knowledge) {
-      const group = k.type === "background" ? k.kind ?? "thing" : k.type;
-      if (hidden.has(group)) continue;
-      nodes.push({ id: k.id, label: k.title, color: colorOf(k), size: 4 + Math.sqrt(k.sources.length) * 3, group, item: k });
-    }
-    for (const g of gaps) {
-      if (g.status === "dropped") continue;
-      const group = g.status === "answered" ? "answer" : "gap";
-      if (!hidden.has(group)) nodes.push({ id: g.id, label: g.question, color: COLORS[group], size: 3 + g.priority * 0.8, group, gap: g });
-    }
+export function Graph({ knowledge, gaps, query, selected, onSelect }: MapProps) {
+  const ref = useRef<ForceGraphMethods<GNode, GLink>>();
+  const { box, size } = useBoxSize();
+  const [hover, setHover] = useState<string | null>(null);
+
+  const { data, islands, bounds } = useMemo(() => {
+    const answered = answeredIds(gaps);
+    const byGroup = new Map<string, Knowledge[]>();
+    for (const k of knowledge) (byGroup.get(groupOf(k)) ?? byGroup.set(groupOf(k), []).get(groupOf(k))!).push(k);
+    for (const [g, items] of byGroup) items.sort(g === "unfinished"
+      ? (a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999")
+      : (a, b) => b.sources.length - a.sources.length || a.title.localeCompare(b.title));
+
+    const nodes: GNode[] = [], islands: Island[] = [];
+    const rows = ROWS.map((row) => row.filter((g) => byGroup.has(g)).map((group) => {
+      const n = byGroup.get(group)!.length, cols = Math.ceil(n / PER_COL), perCol = Math.ceil(n / cols);
+      return { group, cols, perCol, w: cols * PILL_W + (cols - 1) * COL_GAP + 2 * PAD, h: TITLE + perCol * (PILL_H + GAP) - GAP + 2 * PAD };
+    }));
+    const rowW = rows.map((r) => r.reduce((s, i) => s + i.w, 0) + (r.length - 1) * ISLAND_GAP);
+    const width = Math.max(...rowW);
+    let y = 0;
+    rows.forEach((row, ri) => {
+      let x = (width - rowW[ri]) / 2;
+      for (const isl of row) {
+        islands.push({ group: isl.group, x, y, w: isl.w, h: isl.h, count: byGroup.get(isl.group)!.length });
+        byGroup.get(isl.group)!.forEach((k, i) => {
+          const c = Math.floor(i / isl.perCol), r = i % isl.perCol;
+          nodes.push({
+            id: k.id, label: k.title, color: COLORS[isl.group], group: isl.group, item: k, answered: answered.has(k.id),
+            fx: x + PAD + c * (PILL_W + COL_GAP) + PILL_W / 2, fy: y + PAD + TITLE + r * (PILL_H + GAP) + PILL_H / 2,
+          });
+        });
+        x += isl.w + ISLAND_GAP;
+      }
+      y += Math.max(0, ...row.map((i) => i.h)) + ISLAND_GAP;
+    });
     const ids = new Set(nodes.map((n) => n.id));
-    for (const k of knowledge) for (const l of k.links) if (ids.has(k.id) && ids.has(l.target_id)) links.push({ source: k.id, target: l.target_id, type: l.type });
-    for (const g of gaps) if (ids.has(g.id)) for (const t of g.knowledge_ids) if (ids.has(t)) links.push({ source: g.id, target: t, type: "asks" });
-    return { nodes, links };
-  }, [knowledge, gaps, hidden]);
+    const links: GLink[] = [];
+    for (const k of knowledge) for (const l of k.links) if (ids.has(l.target_id) && l.target_id !== k.id) links.push({ source: k.id, target: l.target_id, type: l.type });
+    return { data: { nodes, links }, islands, bounds: { w: width, h: y - ISLAND_GAP } };
+  }, [knowledge, gaps]);
 
   const neighbours = useMemo(() => {
     const m = new Map<string, Set<string>>();
     for (const l of data.links) {
-      const s = typeof l.source === "string" ? l.source : (l.source as GNode).id;
-      const t = typeof l.target === "string" ? l.target : (l.target as GNode).id;
+      const s = end(l.source), t = end(l.target);
       (m.get(s) ?? m.set(s, new Set()).get(s)!).add(t);
       (m.get(t) ?? m.set(t, new Set()).get(t)!).add(s);
     }
     return m;
   }, [data]);
 
+  // fit the whole map on screen whenever the panel or the data changes
   useEffect(() => {
-    const fg = ref.current;
-    if (!fg) return;
-    const linked = new Set(data.links.flatMap((l) => [l.source, l.target]));
-    // unlinked nodes repel less, so they stay near the cluster instead of flying to the edges
-    fg.d3Force("charge")?.strength((n: NodeObject) => (linked.has((n as GNode).id) ? -320 : -40));
-    fg.d3Force("link")?.distance(80);
-  }, [data]);
+    const t = setTimeout(() => {
+      const fg = ref.current;
+      if (!fg || !bounds.w) return;
+      fg.centerAt(bounds.w / 2, bounds.h / 2, 0);
+      fg.zoom(Math.min(1.6, (size.w - 48) / bounds.w, (size.h - 48) / bounds.h), 300);
+    }, 30);
+    return () => clearTimeout(t);
+  }, [size, bounds]);
 
-  const focus = selected ?? hover;
-  const near = focus ? neighbours.get(focus) ?? new Set() : null;
+  const q = query.trim().toLowerCase();
+  const matches = useMemo(() => q ? new Set(data.nodes.filter((n) => matchesQuery(n.item, q)).map((n) => n.id)) : null, [q, data]);
+  const focus = hover ?? selected;
+  const near = focus ? neighbours.get(focus) ?? new Set<string>() : null;
+  const lit = (id: string) => (matches ? matches.has(id) : !focus || id === focus || near!.has(id));
+  const touches = (l: GLink) => end(l.source) === focus || end(l.target) === focus;
+  const colorAt = (v: unknown) => (v as GNode).color ?? "#ffffff";
 
   return (
-    <div ref={box} style={{ position: "absolute", inset: 0 }}>
+    <div className="graph-canvas"><div ref={box} className="graph-fill">
       <ForceGraph2D
         ref={ref}
         width={size.w} height={size.h}
         graphData={data}
         backgroundColor="rgba(0,0,0,0)"
         nodeId="id"
-        nodeVal={(n) => (n as GNode).size}
-        linkColor={(l) => {
-          const s = (l.source as GNode).id, t = (l.target as GNode).id;
-          if (!focus) return (l as GLink).type === "asks" ? "rgba(255,122,182,0.3)" : "rgba(255,255,255,0.16)";
-          return s === focus || t === focus ? "rgba(233,180,76,0.8)" : "rgba(255,255,255,0.04)";
-        }}
-        linkWidth={(l) => ((l.source as GNode).id === focus || (l.target as GNode).id === focus ? 1.6 : 0.8)}
-        linkDirectionalParticles={(l) => ((l.source as GNode).id === focus || (l.target as GNode).id === focus ? 2 : 0)}
-        linkDirectionalParticleWidth={2}
-        linkDirectionalParticleColor={() => "#e9b44c"}
-        onNodeHover={(n) => setHover(n ? (n as GNode).id : null)}
+        enableNodeDrag={false}
+        cooldownTicks={0}
+        warmupTicks={0}
+        autoPauseRedraw={false}
+        minZoom={0.3} maxZoom={4}
+        nodeLabel={(n) => ((n as GNode).label.length > 30 ? (n as GNode).label : "")}
+        linkCurvature={0.25}
+        linkColor={(l) => (focus && touches(l as GLink) ? "rgba(233,180,76,0.85)" : focus || matches ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.08)")}
+        linkWidth={(l) => (focus && touches(l as GLink) ? 1.6 : 0.7)}
+        // every link carries a slow spark in its source's colour; the focused item's links run faster and gold
+        linkDirectionalParticles={(l) => (focus ? (touches(l as GLink) ? 3 : 0) : matches ? 0 : 1)}
+        linkDirectionalParticleSpeed={(l) => (focus && touches(l as GLink) ? 0.012 : 0.0035)}
+        linkDirectionalParticleWidth={(l) => (focus && touches(l as GLink) ? 3 : 2)}
+        linkDirectionalParticleColor={(l) => (focus && touches(l as GLink) ? "#e9b44c" : colorAt((l as GLink).source) + "cc")}
+        onNodeHover={(n) => { setHover(n ? (n as GNode).id : null); if (box.current) box.current.style.cursor = n ? "pointer" : "grab"; }}
         onNodeClick={(n) => onSelect((n as GNode).id === selected ? null : (n as GNode).id)}
         onBackgroundClick={() => onSelect(null)}
-        nodeCanvasObject={(node, ctx, scale) => {
+        onRenderFramePre={(ctx) => {
+          for (const isl of islands) {
+            const c = COLORS[isl.group];
+            ctx.beginPath(); ctx.roundRect(isl.x, isl.y, isl.w, isl.h, 14);
+            ctx.fillStyle = "rgba(255,255,255,0.022)"; ctx.fill();
+            ctx.strokeStyle = c + "26"; ctx.lineWidth = 1; ctx.stroke();
+            ctx.beginPath(); ctx.arc(isl.x + PAD + 4, isl.y + PAD + 9, 4, 0, 2 * Math.PI); ctx.fillStyle = c; ctx.fill();
+            ctx.font = "600 11px Inter, sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+            ctx.fillStyle = "rgba(236,233,226,0.88)";
+            const title = ISLAND_TITLES[isl.group].toUpperCase();
+            ctx.fillText(title, isl.x + PAD + 14, isl.y + PAD + 9.5);
+            const tw = ctx.measureText(title).width;
+            ctx.font = "11px Inter, sans-serif"; ctx.fillStyle = "rgba(154,152,163,0.8)";
+            ctx.fillText(String(isl.count), isl.x + PAD + 22 + tw, isl.y + PAD + 9.5);
+          }
+        }}
+        nodeCanvasObject={(node, ctx) => {
           const n = node as GNode;
-          const x = n.x ?? 0, y = n.y ?? 0;
-          const dimmed = focus !== null && focus !== n.id && !near?.has(n.id);
-          ctx.globalAlpha = dimmed ? 0.18 : 1;
-          if (n.gap) {
-            ctx.beginPath();
-            const r = n.size;
-            ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
-            ctx.fillStyle = n.color; ctx.fill();
-          } else {
-            if (n.id === focus) { ctx.beginPath(); ctx.arc(x, y, n.size + 4, 0, 2 * Math.PI); ctx.fillStyle = n.color + "33"; ctx.fill(); }
-            ctx.beginPath(); ctx.arc(x, y, n.size, 0, 2 * Math.PI); ctx.fillStyle = n.color; ctx.fill();
+          const x = (n.x ?? 0) - PILL_W / 2, y = (n.y ?? 0) - PILL_H / 2;
+          const on = lit(n.id), isFocus = n.id === focus || n.id === selected;
+          ctx.globalAlpha = on ? 1 : 0.22;
+          ctx.beginPath(); ctx.roundRect(x, y, PILL_W, PILL_H, PILL_H / 2);
+          ctx.fillStyle = "#141419"; ctx.fill();
+          ctx.fillStyle = n.color + (isFocus ? "40" : "17"); ctx.fill();
+          ctx.strokeStyle = n.color + (isFocus ? "ff" : "4d"); ctx.lineWidth = isFocus ? 1.5 : 1; ctx.stroke();
+          // the dot breathes, each one slightly out of step with the next
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 700 + (n.fy ?? 0) / 40 + (n.fx ?? 0) / 90);
+          ctx.beginPath(); ctx.arc(x + 14, y + PILL_H / 2, 3.5 + pulse * 3, 0, 2 * Math.PI); ctx.fillStyle = n.color + "33"; ctx.fill();
+          ctx.beginPath(); ctx.arc(x + 14, y + PILL_H / 2, 3.5, 0, 2 * Math.PI); ctx.fillStyle = n.color; ctx.fill();
+
+          // right-hand detail: the due date for unfinished work, a tick when the leaver explained it
+          let right = PILL_W - 12;
+          ctx.textBaseline = "middle"; ctx.textAlign = "right";
+          if (n.answered) {
+            ctx.font = "600 11px Inter, sans-serif"; ctx.fillStyle = COLORS.answer;
+            ctx.fillText("✓", x + right, y + PILL_H / 2 + 0.5); right -= 14;
           }
-          const showLabel = n.id === focus || near?.has(n.id) || (!focus && (n.size > 7.5 || scale > 2.5));
-          if (showLabel) {
-            const max = n.id === focus ? 80 : 36;
-            const text = (n.group === "gap" ? "? " : n.group === "answer" ? "✓ " : "") + (n.label.length > max ? n.label.slice(0, max - 1) + "…" : n.label);
-            ctx.font = `${Math.max(12 / scale, 3)}px Inter, sans-serif`;
-            ctx.textAlign = "center"; ctx.textBaseline = "top";
-            ctx.fillStyle = dimmed ? "rgba(236,233,226,0.3)" : "rgba(236,233,226,0.92)";
-            ctx.fillText(text, x, y + n.size + 3);
+          if (n.item.due) {
+            ctx.font = "500 10px Inter, sans-serif"; ctx.fillStyle = "#f97066";
+            const d = shortDate(n.item.due);
+            ctx.fillText(d, x + right, y + PILL_H / 2 + 0.5); right -= ctx.measureText(d).width + 8;
           }
+          ctx.font = `${isFocus ? 500 : 400} 11.5px Inter, sans-serif`; ctx.textAlign = "left";
+          ctx.fillStyle = "rgba(236,233,226,0.94)";
+          ctx.fillText(fit(ctx, n.label, right - 26), x + 26, y + PILL_H / 2 + 0.5);
           ctx.globalAlpha = 1;
         }}
         nodePointerAreaPaint={(node, color, ctx) => {
           const n = node as GNode;
-          ctx.beginPath(); ctx.arc(n.x ?? 0, n.y ?? 0, n.size + 4, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill();
+          ctx.fillStyle = color; ctx.fillRect((n.x ?? 0) - PILL_W / 2, (n.y ?? 0) - PILL_H / 2, PILL_W, PILL_H);
         }}
-        cooldownTicks={150}
-        onEngineStop={() => ref.current?.zoomToFit(500, 70)}
       />
-    </div>
+    </div></div>
   );
+}
+
+export function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
+  if (ctx.measureText(text).width <= max) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ctx.measureText(text.slice(0, mid) + "…").width <= max) lo = mid; else hi = mid - 1; }
+  return text.slice(0, lo).trimEnd() + "…";
+}
+
+export function shortDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }

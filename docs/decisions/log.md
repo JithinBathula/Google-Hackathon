@@ -13,6 +13,12 @@ Newest first. Each entry records what we decided, why, and the alternatives we c
 
 ---
 
+### 2026-10-13: Successor gets a chat first, the map second, and an MCP server
+- **Decision:** The successor's page opens on a Gemini chat grounded in the handover (`POST /ask`, cited records shown as sources). The knowledge map moves to a second tab with two views the reader can switch between: Groups (one labelled island per knowledge type, pills that can't overlap) and Constellation (a live, gently drifting star map clustered by type). Both animate sparks along the links. A third tab explains that the knowledge lives in Firestore and is served as an MCP server at `/mcp` (open-source `mcp` SDK, mounted in the same Cloud Run service), with setup snippets for Gemini CLI, Claude and Cursor.
+- **Why:** The force-directed graph was unreadable and gave the successor nothing to do. A chat answers "what do I do now", and the MCP server lets the knowledge travel into the tools people already use, which is a stronger Gen AI and innovation story.
+- **Alternatives considered:** keeping the force layout with better styling (labels still collide); a radial layout with labels on the spokes (tried, looked cluttered); a separate Cloud Run service for MCP (two deploys).
+- **Revisit if:** the MCP endpoint needs auth beyond the demo; put it behind Google sign-in or IAP.
+
 ### 2026-10-12: Deploy as one Cloud Run container with Firestore and Vertex AI
 - **Decision:** One Cloud Run service in `asia-southeast1` serves the built UI at `/` and the API at `/api`. Data lives in Firestore behind the existing `Store` methods (`STORE=firestore`). Gemini is called through Vertex AI as a service account, from the `global` location, because `gemini-3.8-flash` isn't served in `asia-southeast1`. The OAuth client secret is in Secret Manager. Single instance, CPU always on.
 - **Why:** One URL for judges and no CORS. One instance with CPU always on is the simplest way to keep background syncs running and the in-memory OAuth state valid, with no task queue.

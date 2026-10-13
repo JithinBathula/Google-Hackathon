@@ -3,14 +3,16 @@ Run locally with `uv run uvicorn handover.api:app --port 8080`. OpenAPI page at 
 
 import base64
 import binascii
+import json
 import secrets
 from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
+from handover.ask import AskAnswer, Turn, ask, ask_stream
 from handover.interview import advance_interview, answer_interview, check_written_answer, start_interview
 from handover.llm.gemini import Gemini
 from handover.models import (
@@ -296,6 +298,42 @@ def list_knowledge(leaver_id: str, type: KnowledgeType | None = None) -> list[Kn
 def list_gaps(leaver_id: str, status: Literal["open", "answered", "dropped"] | None = None) -> list[Gap]:
     gaps = _store(leaver_id).gaps()
     return sorted((g for g in gaps if not status or g.status == status), key=lambda g: -g.priority)
+
+
+# ---- the successor's assistant ----
+class AskBody(BaseModel):
+    question: str
+    history: list[Turn] = []
+    successor: str | None = None
+
+
+@app.post("/leavers/{leaver_id}/ask", response_model=AskAnswer)
+def ask_question(leaver_id: str, body: AskBody) -> AskAnswer:
+    """The successor's chat: Gemini answers from the knowledge base only and cites the records it used."""
+    store = _store(leaver_id)
+    if not body.question.strip():
+        raise HTTPException(400, "ask a question first")
+    try:
+        return ask(store, body.question, body.history, body.successor)
+    except Exception as error:
+        raise HTTPException(502, f"Gemini could not answer: {error}") from error
+
+
+@app.post("/leavers/{leaver_id}/ask/stream")
+def ask_question_stream(leaver_id: str, body: AskBody) -> StreamingResponse:
+    """The chat's answer as it is written: one JSON object per line, text pieces first, then the sources."""
+    store = _store(leaver_id)
+    if not body.question.strip():
+        raise HTTPException(400, "ask a question first")
+
+    def lines():
+        try:
+            for event in ask_stream(store, body.question, body.history, body.successor):
+                yield json.dumps(event) + "\n"
+        except Exception as error:
+            yield json.dumps({"error": f"Gemini could not answer: {error}"}) + "\n"
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson")
 
 
 class GapUpdate(BaseModel):

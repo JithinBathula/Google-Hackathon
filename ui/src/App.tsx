@@ -77,7 +77,7 @@ export default function App() {
       <main className={"main " + view + (view === "successor" && leaver.handover.status !== "complete" ? " gated" : "")}>
         {view === "successor"
           ? leaver.handover.status === "complete"
-            ? <Successor leaver={leaver} knowledge={knowledge} gaps={gaps} docs={docs} onBack={() => choose("landing")} />
+            ? <Successor leaver={leaver} successor={SUCCESSOR} knowledge={knowledge} gaps={gaps} docs={docs} onBack={() => choose("landing")} />
             : <SuccessorGate leaver={leaver} gaps={gaps} onBack={() => choose("landing")} onSwitch={() => choose("leaver")} />
           : <LeaverView leaver={leaver} gaps={gaps} knowledge={knowledge} docs={docs} onBack={() => choose("landing")} onRestart={restart} onRefresh={load} onSubmit={submit} onOpenSuccessor={() => choose("successor")} onAnswered={(g) => setGaps((all) => all.map((x) => (x.id === g.id ? g : x)))} />}
       </main>

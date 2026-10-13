@@ -74,8 +74,18 @@ open http://localhost:8080/docs
 | `GET /leavers/{id}/knowledge?type=decision` | Merged knowledge, most sources first |
 | `GET /leavers/{id}/gaps?status=open` | Merged gaps |
 | `PATCH /leavers/{id}/gaps/{gap_id}` `{status, answer}` | Stage 2 writes the leaver's answer |
+| `POST /leavers/{id}/ask` `{question, history}` | The successor's chat: Gemini answers from the knowledge base only, with cited record ids and follow-ups |
+| `POST /leavers/{id}/ask/stream` | The same answer streamed as it is written: one JSON object per line, text pieces then `{cited_ids, follow_ups}` |
+| `POST /leavers/{id}/gaps/{gap_id}/check` `{text, question?, attempts}` | A written answer checked by Gemini like an interview answer: saved if enough, else a follow-up |
 
 Sync only re-extracts documents whose content changed, and only consolidates if something was extracted.
+
+### MCP server
+`handover.server:app` (what Cloud Run runs) also serves the knowledge base as an MCP server at `/mcp` (streamable HTTP,
+stateless), reading the same store (Firestore on Cloud Run). Tools: `list_handovers`, `ask_handover`,
+`search_knowledge`, `get_item`, `open_work`. Try it locally with `uv run uvicorn handover.server:app --port 8080`, then
+`claude mcp add --transport http handover http://localhost:8080/mcp` or the snippets on the successor's
+"Use in your AI tools" tab. The demo endpoint has no auth.
 
 ## The same from the terminal
 ```bash

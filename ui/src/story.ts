@@ -35,3 +35,11 @@ export const WORDS: { word: string; meaning: string }[] = [
   { word: "Livestream", meaning: "Broadcasting the event online." },
   { word: "Headcount", meaning: "The final guest number the caterer needs." },
 ];
+
+/** Starter questions in the successor's chat. Each is answerable from the demo knowledge base. */
+export const STARTERS: string[] = [
+  "What do I need to do first?",
+  "Why did we pick Hotel Marina over Hotel Orchid?",
+  "What needs Farah's approval?",
+  "How should I work with Mr Lim?",
+];
