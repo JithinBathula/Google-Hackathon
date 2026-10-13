@@ -3,16 +3,16 @@ import { Graph } from "./Graph";
 import type { Doc, Gap, Knowledge, Leaver } from "./types";
 import { COLORS, LABELS, LINK_LABELS, colorOf, labelOf } from "./theme";
 
-interface Props { leaver: Leaver; knowledge: Knowledge[]; gaps: Gap[]; docs: Doc[] }
+interface Props { leaver: Leaver; knowledge: Knowledge[]; gaps: Gap[]; docs: Doc[]; onBack: () => void }
 
-const GROUPS = ["person", "organisation", "thing", "decision", "rule", "unfinished", "lesson", "gap"];
+const GROUPS = ["person", "organisation", "thing", "decision", "rule", "unfinished", "lesson", "answer", "gap"];
 
-export function Successor({ leaver, knowledge, gaps, docs }: Props) {
+export function Successor({ leaver, knowledge, gaps, docs, onBack }: Props) {
   const [selected, setSelected] = useState<string | null>(new URLSearchParams(location.search).get("node"));
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const byId = useMemo(() => new Map(knowledge.map((k) => [k.id, k])), [knowledge]);
   const docById = useMemo(() => new Map(docs.map((d) => [d.id, d])), [docs]);
-  const open = gaps.filter((g) => g.status === "open");
+  const answers = gaps.filter((g) => g.status === "answered");
   const item = selected ? byId.get(selected) : undefined;
   const gap = selected ? gaps.find((g) => g.id === selected) : undefined;
   const dueLater = knowledge.filter((k) => k.type === "unfinished" && k.due && k.due > leaver.last_day).sort((a, b) => a.due!.localeCompare(b.due!));
@@ -24,17 +24,18 @@ export function Successor({ leaver, knowledge, gaps, docs }: Props) {
   return (
     <>
       <div className="graph-wrap">
+        <button className="graph-back" onClick={onBack}>← Back to home</button>
         <Graph knowledge={knowledge} gaps={gaps} hidden={hidden} selected={selected} onSelect={setSelected} />
         <div className="stats">
           <div className="stat"><b>{leaver.documents}</b><span>documents read</span></div>
           <div className="stat"><b>{knowledge.length}</b><span>things {leaver.name.split(" ")[0]} knows</span></div>
-          <div className="stat"><b>{open.length}</b><span>questions still open</span></div>
+          <div className="stat"><b>{answers.length}</b><span>answers handed over</span></div>
         </div>
         <div className="hint">click a node · drag to move · scroll to zoom</div>
         <div className="legend">
           {GROUPS.map((g) => (
             <button key={g} className={hidden.has(g) ? "off" : ""} onClick={() => toggle(g)}>
-              <i style={{ background: COLORS[g], borderRadius: g === "gap" ? 1 : "50%", transform: g === "gap" ? "rotate(45deg)" : "none" }} />{LABELS[g]}
+              <i style={{ background: COLORS[g], borderRadius: g === "gap" || g === "answer" ? 1 : "50%", transform: g === "gap" || g === "answer" ? "rotate(45deg)" : "none" }} />{LABELS[g]}
             </button>
           ))}
         </div>
@@ -71,7 +72,7 @@ export function Successor({ leaver, knowledge, gaps, docs }: Props) {
         )}
         {gap && (
           <>
-            <span className="tag" style={{ background: COLORS.gap + "22", color: COLORS.gap }}><i style={{ background: COLORS.gap }} />Question for {leaver.name.split(" ")[0]}</span>
+            <span className="tag" style={{ background: (gap.status === "answered" ? COLORS.answer : COLORS.gap) + "22", color: gap.status === "answered" ? COLORS.answer : COLORS.gap }}><i style={{ background: gap.status === "answered" ? COLORS.answer : COLORS.gap }} />{gap.status === "answered" ? `Answered by ${leaver.name.split(" ")[0]}` : `Question for ${leaver.name.split(" ")[0]}`}</span>
             <h2>{gap.question}</h2>
             <p>{gap.why_it_matters}</p>
             {gap.answer && <div className="field"><label>{leaver.name.split(" ")[0]}'s answer</label>{gap.answer}</div>}

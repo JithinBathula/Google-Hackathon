@@ -1,9 +1,10 @@
-"""Storage, per leaver: the leaver, their Google token, and the collections documents, raw_knowledge, raw_gaps,
-knowledge and gaps. Two backends behind the same methods, picked by the STORE setting:
+"""Storage, per leaver: the leaver, their Google token, the handover submission and interview progress, and the
+collections documents, raw_knowledge, raw_gaps, knowledge and gaps. Two backends behind the same methods, picked by
+the STORE setting:
 
-- files (local default): one JSON file per collection under .data/<leaver_id>/
-- firestore (Cloud Run): leavers/{id} holds the leaver, leavers/{id}/private/google-token the token, and each
-  collection is a subcollection leavers/{id}/<collection>/<record id>
+- files (local default): one JSON file per record or collection under .data/<leaver_id>/
+- firestore (Cloud Run): leavers/{id} holds the leaver; leavers/{id}/private/ holds google-token, handover and
+  interview; each collection is a subcollection leavers/{id}/<collection>/<record id>
 
 Use open_store() and list_leavers() rather than constructing a backend directly."""
 
@@ -14,7 +15,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from handover.config import settings
-from handover.models import Document, Gap, Knowledge, Leaver, RawGap, RawKnowledge
+from handover.models import Document, Gap, HandoverState, InterviewState, Knowledge, Leaver, RawGap, RawKnowledge
 
 COLLECTIONS = ["documents", "raw_knowledge", "raw_gaps", "knowledge", "gaps"]
 
@@ -54,6 +55,43 @@ class Store:
 
     def save_token(self, token: dict) -> None:
         self._put("google-token", token)
+
+    # ---- submitted handover ----
+    def handover(self) -> HandoverState:
+        """The quiz submission/review state. Old workspaces begin as a draft."""
+        d = self._get("handover")
+        return HandoverState.model_validate(d) if d else HandoverState()
+
+    def save_handover(self, handover: HandoverState) -> None:
+        self._put("handover", handover.model_dump(mode="json"))
+
+    def delete_handover(self) -> None:
+        """Remove the submitted handover snapshot, if one exists."""
+        self._delete("handover")
+
+    # ---- AI-led interview ----
+    def interview(self) -> InterviewState:
+        d = self._get("interview")
+        return InterviewState.model_validate(d) if d else InterviewState()
+
+    def save_interview(self, interview: InterviewState) -> None:
+        self._put("interview", interview.model_dump(mode="json"))
+
+    def delete_interview(self) -> None:
+        self._delete("interview")
+
+    def restart_handover(self) -> None:
+        """Clear answers, discard review-generated follow-ups, and remove the submission snapshot."""
+        original = []
+        for gap in self.gaps():
+            if gap.id.startswith("g-review-"):
+                continue
+            if gap.status != "dropped":
+                gap.status, gap.answer = "open", None
+            original.append(gap)
+        self.replace_gaps(original)
+        self.delete_handover()
+        self.delete_interview()
 
     # ---- documents ----
     def documents(self) -> list[Document]:
@@ -113,13 +151,13 @@ class Store:
 
     def copy_to(self, other: "Store") -> None:
         """Copy everything this leaver has into another store, such as local files into Firestore."""
-        for name in ("leaver", "google-token"):
+        for name in ("leaver", "google-token", "handover", "interview"):
             if (d := self._get(name)) is not None:
                 other._put(name, d)
         for collection in COLLECTIONS:
             other._write(collection, self._read(collection))
 
-    # ---- primitives: single records (leaver, google-token) and whole collections ----
+    # ---- primitives: single records (leaver, google-token, handover, interview) and whole collections ----
     def _get(self, name: str) -> dict | None:
         """One JSON file, such as leaver.json. None if it is missing."""
         p = self.dir / f"{name}.json"
@@ -130,6 +168,9 @@ class Store:
         p.write_text(json.dumps(data, indent=1))
         if name == "google-token":
             p.chmod(0o600)
+
+    def _delete(self, name: str) -> None:
+        (self.dir / f"{name}.json").unlink(missing_ok=True)
 
     def _read(self, collection: str) -> dict:
         """The collection as a dict keyed by id. Empty if the file is missing."""
@@ -166,7 +207,7 @@ class FirestoreStore(Store):
         return [Leaver.model_validate(d.to_dict()) for d in _firestore().collection("leavers").stream()]
 
     def _doc(self, name: str):
-        """The leaver lives on the leaver document itself; the token in a private subcollection."""
+        """The leaver lives on the leaver document itself; the other single records in a private subcollection."""
         return self.ref if name == "leaver" else self.ref.collection("private").document(name)
 
     def _get(self, name: str) -> dict | None:
@@ -175,6 +216,9 @@ class FirestoreStore(Store):
 
     def _put(self, name: str, data: dict) -> None:
         self._doc(name).set(data)
+
+    def _delete(self, name: str) -> None:
+        self._doc(name).delete()
 
     def _read(self, collection: str) -> dict:
         return {d.id: d.to_dict() for d in self.ref.collection(collection).stream()}

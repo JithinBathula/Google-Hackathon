@@ -23,6 +23,64 @@ class SyncState(BaseModel):
     error: str | None = None
 
 
+class HandoverAnswer(BaseModel):
+    """One answer included in the submitted handover snapshot."""
+
+    gap_id: str
+    question: str
+    answer: str
+
+
+class HandoverState(BaseModel):
+    """The leaver's quiz submission and Gemini's final completeness review."""
+
+    status: Literal["draft", "reviewing", "needs_answers", "complete", "error"] = "draft"
+    submitted_at: datetime | None = None
+    reviewed_at: datetime | None = None
+    completed_at: datetime | None = None
+    answers: list[HandoverAnswer] = Field(default_factory=list)
+    remaining_gap_ids: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class InterviewChapter(BaseModel):
+    """One chronological beat in the AI-led offboarding interview."""
+
+    id: str
+    date: str | None = None
+    title: str
+    narrative: str
+    knowledge_ids: list[str] = Field(default_factory=list)
+    gap_ids: list[str] = Field(default_factory=list)
+
+
+class InterviewTurn(BaseModel):
+    """One answer attempt, including attempts that needed a follow-up."""
+
+    gap_id: str
+    question: str
+    transcript: str
+    captured_answer: str | None = None
+    sufficient: bool
+    assistant_message: str
+    created_at: datetime
+
+
+class InterviewState(BaseModel):
+    """Persistent progress through the AI avatar interview."""
+
+    status: Literal["not_started", "in_progress", "complete", "error"] = "not_started"
+    phase: Literal["ready", "narrating", "asking", "complete", "error"] = "ready"
+    timeline: list[InterviewChapter] = Field(default_factory=list)
+    current_item: int = 0
+    current_gap_id: str | None = None
+    current_question: str | None = None
+    turns: list[InterviewTurn] = Field(default_factory=list)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
+
+
 class Leaver(BaseModel):
     """The person leaving. One workspace each: leavers/{id}/..."""
 

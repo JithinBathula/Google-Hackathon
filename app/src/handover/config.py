@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     google_cloud_location: str = "global"
     # Verified at https://ai.google.dev/gemini-api/docs/models on 2026-10-08
     gemini_model: str = "gemini-3.8-flash"
+    gemini_tts_model: str = "gemini-3.8-flash-tts"
+    gemini_voice: str = "Kore"
 
     # "files" keeps everything under .data/ (local); "firestore" is for Cloud Run
     store: Literal["files", "firestore"] = "files"

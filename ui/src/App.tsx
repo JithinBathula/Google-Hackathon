@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { Landing, SuccessorGate } from "./Landing";
 import { LeaverView } from "./LeaverView";
 import { Successor } from "./Successor";
 import type { Doc, Gap, Knowledge, Leaver } from "./types";
@@ -8,7 +9,10 @@ const LEAVER_ID = "maya-tan";
 const SUCCESSOR = "Ben Ong";
 
 export default function App() {
-  const [persona, setPersona] = useState<"leaver" | "successor">(new URLSearchParams(location.search).get("as") === "leaver" ? "leaver" : "successor");
+  const requested = new URLSearchParams(location.search).get("as");
+  const [view, setView] = useState<"landing" | "leaver" | "successor">(
+    requested === "leaver" ? "leaver" : requested === "successor" || requested === "onboarder" ? "successor" : "landing",
+  );
   const [leaver, setLeaver] = useState<Leaver | null>(null);
   const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
   const [gaps, setGaps] = useState<Gap[]>([]);
@@ -24,41 +28,43 @@ export default function App() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    if (leaver?.sync.state !== "running") return;
-    const t = setInterval(async () => { const l = await api.leaver(LEAVER_ID); setLeaver(l); if (l.sync.state !== "running") load(); }, 2000);
+    if (leaver?.sync.state !== "running" && leaver?.handover.status !== "reviewing") return;
+    const t = setInterval(async () => {
+      const l = await api.leaver(LEAVER_ID);
+      setLeaver(l);
+      if (l.sync.state !== "running" && l.handover.status !== "reviewing") load();
+    }, 2000);
     return () => clearInterval(t);
-  }, [leaver?.sync.state, load]);
+  }, [leaver?.sync.state, leaver?.handover.status, load]);
 
-  const sync = async () => { await api.sync(LEAVER_ID); setLeaver(await api.leaver(LEAVER_ID)); };
+  const choose = (next: "landing" | "leaver" | "successor") => {
+    setView(next);
+    const url = new URL(location.href);
+    if (next === "landing") url.searchParams.delete("as");
+    else url.searchParams.set("as", next);
+    history.replaceState(null, "", url);
+  };
+  const submit = async () => {
+    const handover = await api.submit(LEAVER_ID);
+    setLeaver((current) => current ? { ...current, handover } : current);
+  };
+  const restart = async () => {
+    await api.restart(LEAVER_ID);
+    await load();
+  };
 
   if (error) return <div className="empty" style={{ paddingTop: 120 }}>Can't reach the API.<small>Start it with <code>uv run uvicorn handover.api:app --port 8080</code> in app/, then reload. ({error})</small></div>;
-  if (!leaver) return null;
-  const s = leaver.sync;
-
+  if (!leaver) return <div className="loading-page"><span>Hand<i>over</i></span></div>;
+  if (view === "landing") return <Landing leaver={leaver} gaps={gaps} successorName={SUCCESSOR} onChoose={choose} />;
   return (
     <div className="app">
-      <header className="top">
-        <div className="brand">Hand<i>over</i></div>
-        <div className="persona">
-          <button className={persona === "leaver" ? "on" : ""} onClick={() => setPersona("leaver")}><span className="av" style={{ background: "#e9b44c", color: "#0c0c10" }}>{initials(leaver.name)}</span>{leaver.name} · leaving {leaver.last_day}</button>
-          <button className={persona === "successor" ? "on" : ""} onClick={() => setPersona("successor")}><span className="av" style={{ background: "#5cc8ff", color: "#0c0c10" }}>{initials(SUCCESSOR)}</span>{SUCCESSOR} · taking over</button>
-        </div>
-        <div className="spacer" />
-        <div className="sync">
-          <span className={"dot " + s.state} />
-          {s.state === "running" ? `Syncing: ${s.step ?? "…"}` : s.state === "error" ? `Sync failed: ${s.error}` : leaver.connected ? `${leaver.email} · ${s.finished_at ? "synced " + new Date(s.finished_at).toLocaleTimeString() : "not synced yet"}` : "Google not connected"}
-          {leaver.connected
-            ? <button className="btn" disabled={s.state === "running"} onClick={sync}>Sync Drive</button>
-            : <a className="btn primary" href={api.connectUrl(LEAVER_ID)}>Connect Google</a>}
-        </div>
-      </header>
-      <main className={"main " + persona}>
-        {persona === "successor"
-          ? <Successor leaver={leaver} knowledge={knowledge} gaps={gaps} docs={docs} />
-          : <LeaverView leaver={leaver} gaps={gaps} knowledge={knowledge} docs={docs} onAnswered={(g) => setGaps((all) => all.map((x) => (x.id === g.id ? g : x)))} />}
+      <main className={"main " + view + (view === "successor" && leaver.handover.status !== "complete" ? " gated" : "")}>
+        {view === "successor"
+          ? leaver.handover.status === "complete"
+            ? <Successor leaver={leaver} knowledge={knowledge} gaps={gaps} docs={docs} onBack={() => choose("landing")} />
+            : <SuccessorGate leaver={leaver} gaps={gaps} onBack={() => choose("landing")} onSwitch={() => choose("leaver")} />
+          : <LeaverView leaver={leaver} gaps={gaps} knowledge={knowledge} docs={docs} onBack={() => choose("landing")} onRestart={restart} onRefresh={load} onSubmit={submit} onAnswered={(g) => setGaps((all) => all.map((x) => (x.id === g.id ? g : x)))} />}
       </main>
     </div>
   );
 }
-
-const initials = (n: string) => n.split(" ").map((p) => p[0]).join("").slice(0, 2);

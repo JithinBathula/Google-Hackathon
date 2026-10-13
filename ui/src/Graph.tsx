@@ -32,7 +32,11 @@ export function Graph({ knowledge, gaps, hidden, selected, onSelect }: Props) {
       if (hidden.has(group)) continue;
       nodes.push({ id: k.id, label: k.title, color: colorOf(k), size: 4 + Math.sqrt(k.sources.length) * 3, group, item: k });
     }
-    if (!hidden.has("gap")) for (const g of gaps) if (g.status === "open") nodes.push({ id: g.id, label: g.question, color: COLORS.gap, size: 3 + g.priority * 0.8, group: "gap", gap: g });
+    for (const g of gaps) {
+      if (g.status === "dropped") continue;
+      const group = g.status === "answered" ? "answer" : "gap";
+      if (!hidden.has(group)) nodes.push({ id: g.id, label: g.question, color: COLORS[group], size: 3 + g.priority * 0.8, group, gap: g });
+    }
     const ids = new Set(nodes.map((n) => n.id));
     for (const k of knowledge) for (const l of k.links) if (ids.has(k.id) && ids.has(l.target_id)) links.push({ source: k.id, target: l.target_id, type: l.type });
     for (const g of gaps) if (ids.has(g.id)) for (const t of g.knowledge_ids) if (ids.has(t)) links.push({ source: g.id, target: t, type: "asks" });
@@ -88,7 +92,7 @@ export function Graph({ knowledge, gaps, hidden, selected, onSelect }: Props) {
           const x = n.x ?? 0, y = n.y ?? 0;
           const dimmed = focus !== null && focus !== n.id && !near?.has(n.id);
           ctx.globalAlpha = dimmed ? 0.18 : 1;
-          if (n.group === "gap") {
+          if (n.gap) {
             ctx.beginPath();
             const r = n.size;
             ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
@@ -100,7 +104,7 @@ export function Graph({ knowledge, gaps, hidden, selected, onSelect }: Props) {
           const showLabel = n.id === focus || near?.has(n.id) || (!focus && (n.size > 7.5 || scale > 2.5));
           if (showLabel) {
             const max = n.id === focus ? 80 : 36;
-            const text = (n.group === "gap" ? "? " : "") + (n.label.length > max ? n.label.slice(0, max - 1) + "…" : n.label);
+            const text = (n.group === "gap" ? "? " : n.group === "answer" ? "✓ " : "") + (n.label.length > max ? n.label.slice(0, max - 1) + "…" : n.label);
             ctx.font = `${Math.max(12 / scale, 3)}px Inter, sans-serif`;
             ctx.textAlign = "center"; ctx.textBaseline = "top";
             ctx.fillStyle = dimmed ? "rgba(236,233,226,0.3)" : "rgba(236,233,226,0.92)";
