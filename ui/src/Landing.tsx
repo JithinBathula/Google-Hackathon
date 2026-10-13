@@ -5,9 +5,10 @@ interface Props {
   gaps: Gap[];
   successorName: string;
   onChoose: (role: "leaver" | "successor") => void;
+  onReplay: () => void;
 }
 
-export function Landing({ leaver, gaps, successorName, onChoose }: Props) {
+export function Landing({ leaver, gaps, successorName, onChoose, onReplay }: Props) {
   const questions = gaps.filter((gap) => gap.status !== "dropped");
   const answered = questions.filter((gap) => gap.status === "answered").length;
   const ready = leaver.handover.status === "complete";
@@ -18,7 +19,7 @@ export function Landing({ leaver, gaps, successorName, onChoose }: Props) {
       <div className="landing-orbit orbit-two" />
       <header className="landing-top">
         <div className="wordmark">Hand<i>over</i></div>
-        <span>Knowledge, carried forward.</span>
+        <button className="intro-replay" onClick={onReplay}>New here? Watch the 30-second story <span>→</span></button>
       </header>
 
       <section className="landing-hero">
