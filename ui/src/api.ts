@@ -1,4 +1,4 @@
-import type { Doc, Gap, HandoverState, InterviewAnswerResponse, InterviewState, Knowledge, Leaver } from "./types";
+import type { CheckResponse, Doc, Gap, HandoverState, InterviewAnswerResponse, InterviewState, Knowledge, Leaver } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "/api";
 
@@ -42,6 +42,10 @@ export const api = {
     }
     return response.blob();
   },
+  check: (id: string, gapId: string, body: { text: string; question?: string; attempts: { question: string; answer: string }[] }) =>
+    mutate<CheckResponse>(`/leavers/${id}/gaps/${gapId}/check`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }),
   answer: (id: string, gapId: string, answer: string) =>
     mutate<Gap>(`/leavers/${id}/gaps/${gapId}`, {
       method: "PATCH", headers: { "content-type": "application/json" },

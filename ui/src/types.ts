@@ -54,3 +54,5 @@ export interface Leaver {
   sync: { state: "idle" | "running" | "done" | "error"; step: string | null; started_at: string | null; finished_at: string | null; error: string | null };
   handover: HandoverState;
 }
+
+export interface CheckResponse { sufficient: boolean; message: string; follow_up: string | null; gap: Gap }
