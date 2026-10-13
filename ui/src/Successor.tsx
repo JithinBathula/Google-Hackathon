@@ -18,6 +18,8 @@ export function Successor({ leaver, knowledge, gaps, docs, onBack }: Props) {
   const dueLater = knowledge.filter((k) => k.type === "unfinished" && k.due && k.due > leaver.last_day).sort((a, b) => a.due!.localeCompare(b.due!));
   const backlinks = item ? knowledge.filter((k) => k.links.some((l) => l.target_id === item.id)) : [];
   const asked = item ? gaps.filter((g) => g.knowledge_ids.includes(item.id)) : [];
+  const told = asked.filter((g) => g.status === "answered" && g.answer);
+  const first = leaver.name.split(" ")[0];
 
   const toggle = (g: string) => setHidden((h) => { const n = new Set(h); n.has(g) ? n.delete(g) : n.add(g); return n; });
 
@@ -47,10 +49,13 @@ export function Successor({ leaver, knowledge, gaps, docs, onBack }: Props) {
             <span className="tag" style={{ background: colorOf(item) + "22", color: colorOf(item) }}><i style={{ background: colorOf(item) }} />{labelOf(item)}</span>
             <h2>{item.title}</h2>
             <p>{item.details}</p>
-            {(item.type === "decision" || item.type === "rule") && (
-              <div className="field"><label>Why</label>{item.why ?? <span className="warn">Not written anywhere. {leaver.name.split(" ")[0]} has been asked.</span>}</div>
+            {(item.type === "decision" || item.type === "rule") && !item.why && !told.length && (
+              <div className="field"><label>Why</label><span className="warn">Not written anywhere. {first} has been asked.</span></div>
             )}
-            {item.why && item.type !== "decision" && item.type !== "rule" && <div className="field"><label>Why</label>{item.why}</div>}
+            {item.why && <div className="field"><label>Why</label>{item.why}</div>}
+            {told.length > 0 && <div className="field"><label>{!item.why && (item.type === "decision" || item.type === "rule") ? `Why, in ${first}'s words` : `From ${first}`}</label>
+              {told.map((g) => <p className="told" key={g.id}>{g.answer}</p>)}
+            </div>}
             {item.working_notes && <div className="field"><label>How to work with them</label>{item.working_notes}</div>}
             {item.due && <div className="field"><label>Due</label>{item.due}{item.due > leaver.last_day && <span className="warn"> · after {leaver.name.split(" ")[0]} leaves</span>}</div>}
             {item.owner && <div className="field"><label>Owner</label>{item.owner}</div>}
