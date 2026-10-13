@@ -9,18 +9,19 @@ from handover.llm.gemini import Gemini
 from handover.models import Gap, InterviewChapter, InterviewState, InterviewTurn, Knowledge
 from handover.store import Store
 
-PLAN_SYSTEM = """You are preparing a warm, conversational video-style offboarding interview.
-Build a chronological story of the employee's work from the supplied knowledge. The interview should help a successor
-understand how the work evolved, what was decided, who matters, what was learned, and what remains unfinished.
+PLAN_SYSTEM = """You are preparing a spoken offboarding interview. An AI interviewer asks the departing employee each
+open question, one at a time, so a successor can carry on their work.
 
-Rules:
-- Prefer chronological order when dates exist. When dates are unclear, group related context where it naturally fits.
-- This is a guided conversation, not a rigid project plan. Give enough context for the successor to carry on and know
-  who or what to consult for details; do not demand exhaustive information they can reasonably find themselves.
-- Each chapter's `narrative` is spoken aloud by an AI interviewer. Write 2-5 natural sentences, not bullet points.
-- Place each open gap in the chapter where it makes the most sense to pause and ask it.
-- Use only supplied ids. Every open gap id must appear exactly once. Knowledge ids may appear where relevant.
-- Create 4-8 chapters. Do not invent events, dates, reasons, or people.
+Write one item per open question:
+- `gap_ids`: exactly that question's id.
+- `title`: the topic in 3-6 words, such as "Choosing Hotel Marina".
+- `narrative`: one or two short spoken sentences that set up the question from what the documents say, so the employee
+  knows what it is about. Do not ask the question; the interviewer asks it right after. No bullet points.
+- `knowledge_ids`: the knowledge the lead-in draws on, if any.
+- `date`: when it happened, if the knowledge says.
+
+Order the items so the conversation flows: chronologically where dates exist, related topics together. Use only the
+supplied ids, and every open question exactly once. Do not invent events, dates, reasons or people.
 """
 
 PLAN_PROMPT = """Departing employee: {name}, {role}. Last day: {last_day}.
@@ -260,41 +261,25 @@ def _complete(store: Store, state: InterviewState) -> InterviewState:
 
 
 def _clean_plan(chapters: list[PlannedChapter], knowledge: list[Knowledge], gaps: list[Gap]) -> list[InterviewChapter]:
+    """One item per open question, in Gemini's order. A question Gemini left out is still asked, without a lead-in."""
     knowledge_ids = {item.id for item in knowledge}
-    gap_ids = {gap.id for gap in gaps}
-    used_gaps: set[str] = set()
-    out = []
-    for index, chapter in enumerate(chapters[:8]):
-        if not chapter.title.strip() or not chapter.narrative.strip():
-            continue
-        assigned = [gap_id for gap_id in chapter.gap_ids if gap_id in gap_ids and gap_id not in used_gaps]
-        used_gaps.update(assigned)
+    by_id = {gap.id: gap for gap in gaps}
+    out: list[InterviewChapter] = []
+
+    def add(gap: Gap, title: str, narrative: str, date: str | None = None, knowledge_used: list[str] | None = None) -> None:
         out.append(InterviewChapter(
-            id=f"chapter-{index + 1}",
-            date=chapter.date,
-            title=chapter.title.strip(),
-            narrative=chapter.narrative.strip(),
-            knowledge_ids=[item_id for item_id in chapter.knowledge_ids if item_id in knowledge_ids],
-            gap_ids=assigned,
+            id=f"chapter-{len(out) + 1}", date=date, title=title.strip() or gap.question, narrative=narrative.strip(),
+            knowledge_ids=[i for i in knowledge_used or [] if i in knowledge_ids], gap_ids=[gap.id],
         ))
-    if not out:
-        out = _fallback_chapters(knowledge)
-    unassigned = [gap.id for gap in gaps if gap.id not in used_gaps]
-    if unassigned:
-        out[-1].gap_ids.extend(unassigned)
+
+    for chapter in chapters:
+        for n, gap_id in enumerate(i for i in chapter.gap_ids if i in by_id and i not in {c.gap_ids[0] for c in out}):
+            # Gemini sometimes puts two questions in one item; the second one is asked without repeating the lead-in
+            add(by_id[gap_id], chapter.title, chapter.narrative if n == 0 else "", chapter.date, chapter.knowledge_ids)
+    for gap in gaps:
+        if gap.id not in {c.gap_ids[0] for c in out}:
+            add(gap, gap.question, "")
     return out
-
-
-def _fallback_chapters(knowledge: list[Knowledge]) -> list[InterviewChapter]:
-    ordered = sorted(knowledge, key=lambda item: item.when or item.due or "9999")
-    chunks = [ordered[index:index + 8] for index in range(0, len(ordered), 8)]
-    return [InterviewChapter(
-        id=f"chapter-{index + 1}",
-        date=chunk[0].when if chunk else None,
-        title=chunk[0].title if chunk else "The handover",
-        narrative=" ".join(f"{item.title}. {item.details}" for item in chunk),
-        knowledge_ids=[item.id for item in chunk],
-    ) for index, chunk in enumerate(chunks)]
 
 
 def _invalidate_completed_handover(store: Store) -> None:

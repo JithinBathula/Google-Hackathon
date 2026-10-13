@@ -108,3 +108,20 @@ def test_written_answer_gets_a_follow_up_then_is_saved_with_earlier_attempts(tmp
     assert store.get_gap("g-owner").status == "answered"
     assert store.get_gap("g-owner").answer == "Jun Wong owns the launch."
 
+
+def test_plan_has_one_item_per_question_and_asks_any_left_out(tmp_path: Path):
+    store = _store(tmp_path)
+    gaps = store.gaps() + [
+        Gap(id=f"g-{n}", question=f"Question {n}?", why_it_matters="It matters.", sources=store.gaps()[0].sources, priority=3)
+        for n in (2, 3)
+    ]
+    store.replace_gaps(gaps)
+    gemini = FakeGemini([{"chapters": [{
+        "title": "The launch", "narrative": "The launch is in November.", "gap_ids": ["g-owner", "g-2", "made-up"],
+    }]}])
+
+    state = start_interview(store, gemini)
+
+    assert [c.gap_ids for c in state.timeline] == [["g-owner"], ["g-2"], ["g-3"]]
+    assert [c.narrative for c in state.timeline] == ["The launch is in November.", "", ""]
+    assert state.timeline[2].title == "Question 3?"
