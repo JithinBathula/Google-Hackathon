@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from handover.interview import advance_interview, answer_interview, start_interview
+from handover.interview import advance_interview, answer_interview, check_written_answer, start_interview
 from handover.models import Gap, Knowledge, Leaver, Source
 from handover.store import Store
 
@@ -82,3 +82,29 @@ def test_interview_asks_follow_up_then_captures_a_sufficient_answer(tmp_path: Pa
     assert gap.answer == "Ben should own the November launch because he manages the vendor relationship."
     assert state.status == "complete"
     assert len(state.turns) == 2
+
+
+class RecordingGemini(FakeGemini):
+    def generate_structured(self, prompt, schema, system=None):
+        self.prompt = prompt
+        return super().generate_structured(prompt, schema, system)
+
+
+def test_written_answer_gets_a_follow_up_then_is_saved_with_earlier_attempts(tmp_path: Path):
+    store = _store(tmp_path)
+    vague = {"transcript": "Someone.", "sufficient": False, "assistant_message": "Who exactly?",
+             "follow_up": "Which person should own the launch?"}
+    result, _ = check_written_answer(store, "g-owner", "Someone.", gemini=FakeGemini([vague]))
+    assert not result.sufficient and result.follow_up == "Which person should own the launch?"
+    assert store.get_gap("g-owner").status == "open"
+
+    good = {"transcript": "Jun owns it.", "sufficient": True, "captured_answer": "Jun Wong owns the launch.",
+            "assistant_message": "Thanks."}
+    gemini = RecordingGemini([good])
+    result, _ = check_written_answer(store, "g-owner", "Jun owns it.", result.follow_up,
+                                       [("Who should take over the launch?", "Someone.")], gemini=gemini)
+    assert "Q: Who should take over the launch?\nA: Someone." in gemini.prompt
+    assert "Question just asked: Which person should own the launch?" in gemini.prompt
+    assert store.get_gap("g-owner").status == "answered"
+    assert store.get_gap("g-owner").answer == "Jun Wong owns the launch."
+

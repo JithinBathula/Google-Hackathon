@@ -166,21 +166,8 @@ def answer_interview(
     if not text_answer.strip() and not audio:
         raise RuntimeError("record or type an answer first")
 
-    knowledge = {item.id: item for item in store.knowledge()}
-    related = [knowledge[item_id] for item_id in gap.knowledge_ids if item_id in knowledge]
-    attempts = [turn for turn in state.turns if turn.gap_id == gap.id]
-    prompt = ANSWER_PROMPT.format(
-        original_question=gap.question,
-        why_it_matters=gap.why_it_matters,
-        current_question=state.current_question or gap.question,
-        context="\n".join(_knowledge_text(item) for item in related) or "No additional context beyond the source quote.",
-        attempts="\n".join(f"Q: {turn.question}\nA: {turn.transcript}" for turn in attempts) or "(none)",
-        text_answer=text_answer.strip() or "(audio attached)",
-    )
-    contents = prompt
-    if audio:
-        contents = [types.Part.from_text(text=prompt), types.Part.from_bytes(data=audio, mime_type=mime_type)]
-    result = (gemini or Gemini()).generate_structured(contents, AnswerReview, system=ANSWER_SYSTEM)
+    attempts = [(turn.question, turn.transcript) for turn in state.turns if turn.gap_id == gap.id]
+    result = review_answer(store, gap, state.current_question or gap.question, attempts, text_answer, audio, mime_type, gemini)
 
     transcript = result.transcript.strip() or text_answer.strip()
     turn = InterviewTurn(
@@ -199,13 +186,51 @@ def answer_interview(
         store.save_interview(state)
         return state, None, result.assistant_message
 
-    gap.status = "answered"
-    gap.answer = (result.captured_answer or transcript).strip()
-    store.save_gap(gap)
-    _invalidate_completed_handover(store)
+    _capture(store, gap, result.captured_answer or transcript)
     _move_after_answer(store, state)
     store.save_interview(state)
     return state, gap, result.assistant_message
+
+
+def check_written_answer(store: Store, gap_id: str, text: str, question: str | None = None,
+                         attempts: list[tuple[str, str]] | None = None, gemini: Gemini | None = None) -> tuple[AnswerReview, Gap]:
+    """The written questions get the same check as the interview: a usable answer is saved for the successor,
+    a vague one gets a follow-up. `question` is the follow-up being answered, `attempts` the earlier tries."""
+    gap = store.get_gap(gap_id)
+    if not gap:
+        raise RuntimeError("no such question")
+    if not text.strip():
+        raise RuntimeError("type an answer first")
+    result = review_answer(store, gap, question or gap.question, attempts or [], text, gemini=gemini)
+    if result.sufficient:
+        _capture(store, gap, result.captured_answer or text)
+    return result, gap
+
+
+def review_answer(store: Store, gap: Gap, question: str, attempts: list[tuple[str, str]], text_answer: str = "",
+                  audio: bytes | None = None, mime_type: str = "audio/webm", gemini: Gemini | None = None) -> AnswerReview:
+    """Ask Gemini whether one answer gives the successor enough to act on. Shared by the interview and the written
+    questions."""
+    knowledge = {item.id: item for item in store.knowledge()}
+    related = [knowledge[item_id] for item_id in gap.knowledge_ids if item_id in knowledge]
+    prompt = ANSWER_PROMPT.format(
+        original_question=gap.question,
+        why_it_matters=gap.why_it_matters,
+        current_question=question,
+        context="\n".join(_knowledge_text(item) for item in related) or "No additional context beyond the source quote.",
+        attempts="\n".join(f"Q: {q}\nA: {a}" for q, a in attempts) or "(none)",
+        text_answer=text_answer.strip() or "(audio attached)",
+    )
+    contents = prompt
+    if audio:
+        contents = [types.Part.from_text(text=prompt), types.Part.from_bytes(data=audio, mime_type=mime_type)]
+    return (gemini or Gemini()).generate_structured(contents, AnswerReview, system=ANSWER_SYSTEM)
+
+
+def _capture(store: Store, gap: Gap, answer: str) -> None:
+    gap.status, gap.answer = "answered", answer.strip()
+    store.save_gap(gap)
+    _invalidate_completed_handover(store)
 
 
 def _move_after_answer(store: Store, state: InterviewState) -> None:

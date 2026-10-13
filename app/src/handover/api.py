@@ -11,7 +11,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from handover.interview import advance_interview, answer_interview, start_interview
+from handover.interview import advance_interview, answer_interview, check_written_answer, start_interview
 from handover.llm.gemini import Gemini
 from handover.models import (
     Document,
@@ -211,6 +211,38 @@ def submit_interview_answer(leaver_id: str, body: InterviewAnswerBody) -> Interv
         raise HTTPException(409, str(error)) from error
     except Exception as error:
         raise HTTPException(502, f"Gemini could not review that answer: {error}") from error
+
+
+class Attempt(BaseModel):
+    question: str
+    answer: str
+
+
+class CheckBody(BaseModel):
+    text: str
+    question: str | None = None  # the follow-up being answered, if any
+    attempts: list[Attempt] = []  # earlier tries at this question, oldest first
+
+
+class CheckResponse(BaseModel):
+    sufficient: bool
+    message: str
+    follow_up: str | None = None
+    gap: Gap
+
+
+@app.post("/leavers/{leaver_id}/gaps/{gap_id}/check", response_model=CheckResponse)
+def check_answer(leaver_id: str, gap_id: str, body: CheckBody) -> CheckResponse:
+    """A written answer, checked by Gemini like an interview answer: saved if it is enough, else a follow-up."""
+    store = _store(leaver_id)
+    try:
+        result, gap = check_written_answer(store, gap_id, body.text, body.question, [(a.question, a.answer) for a in body.attempts])
+    except RuntimeError as error:
+        raise HTTPException(409, str(error)) from error
+    except Exception as error:
+        raise HTTPException(502, f"Gemini could not check that answer: {error}") from error
+    return CheckResponse(sufficient=result.sufficient, message=result.assistant_message,
+                         follow_up=None if result.sufficient else result.follow_up or gap.question, gap=gap)
 
 
 @app.post("/leavers/{leaver_id}/interview/speak")
