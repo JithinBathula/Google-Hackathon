@@ -110,7 +110,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; margin: 0; letter-spac
 
 /* successor */
 .succ { position: relative; min-height: 0; min-width: 0; display: flex; flex-direction: column; background: radial-gradient(ellipse at 50% 0%, #16161f 0%, var(--bg) 60%); }
-.succ-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 28px 0; }
+.succ-head { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding: 18px 28px 0; }
 .succ-title small { color: var(--dim); font-size: 12px; }
 .succ-title h1 { font-size: 34px; line-height: 1.1; margin: 2px 0 4px; }
 .succ-stats { color: var(--muted); font-size: 12.5px; }
@@ -121,8 +121,6 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; margin: 0; letter-spac
 .succ-tabs button.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
 .pill-new { font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; padding: 2px 6px; border-radius: 999px; color: #5cc8ff; background: rgba(92,200,255,0.12); border: 1px solid rgba(92,200,255,0.3); }
 .succ-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.graph-back { flex: none; padding: 7px 11px; color: var(--muted); border: 1px solid var(--line-2); border-radius: 8px; background: rgba(21,21,27,0.86); }
-.graph-back:hover { color: var(--text); border-color: var(--muted); }
 
 /* ask */
 .ask { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -167,6 +165,12 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; margin: 0; letter-spac
 .graph-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .graph-canvas { position: relative; flex: 1; min-height: 0; }
 .graph-fill { position: absolute; inset: 0; cursor: grab; }
+/* both map views stay mounted; switching crossfades them, the incoming one easing up from slightly smaller */
+.map-stack { position: relative; flex: 1; min-height: 0; }
+.map-layer { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: 1; transform: scale(1); filter: blur(0); transition: opacity 520ms ease, transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1), filter 520ms ease; }
+.map-layer.off { opacity: 0; transform: scale(0.965); filter: blur(4px); pointer-events: none; }
+.map-layer.sky.off { transform: scale(1.035); }
+@media (prefers-reduced-motion: reduce) { .map-layer, .map-layer.off { transition: opacity 200ms ease; transform: none; filter: none; } }
 .graph-wrap canvas { display: block; }
 .map-tools { padding: 14px 24px 0; display: flex; align-items: center; gap: 14px; color: var(--dim); font-size: 12px; }
 .map-tools input { width: 220px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: rgba(21,21,27,0.9); color: var(--text); font: inherit; font-size: 13px; outline: 0; }

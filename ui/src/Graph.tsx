@@ -19,6 +19,8 @@ interface Island { group: string; x: number; y: number; w: number; h: number; co
 export interface MapProps {
   knowledge: Knowledge[]; gaps: Gap[]; query: string;
   selected: string | null; onSelect: (id: string | null) => void;
+  /** false while the other map view is showing: the canvas keeps its layout but stops animating */
+  active?: boolean;
 }
 
 // the graph library swaps link ends from ids to node objects once it has run
@@ -40,9 +42,20 @@ export function useBoxSize() {
   return { box, size };
 }
 
-export function Graph({ knowledge, gaps, query, selected, onSelect }: MapProps) {
+/** Both map views stay mounted so switching is a crossfade, not a fresh layout. The hidden one finishes settling and
+framing itself, then pauses so it costs nothing until it is shown again. */
+export function usePauseWhenHidden(ref: { current?: { pauseAnimation(): unknown; resumeAnimation(): unknown } }, active: boolean) {
+  useEffect(() => {
+    if (active) { ref.current?.resumeAnimation(); return; }
+    const t = setTimeout(() => ref.current?.pauseAnimation(), 2500);
+    return () => clearTimeout(t);
+  }, [active, ref]);
+}
+
+export function Graph({ knowledge, gaps, query, selected, onSelect, active = true }: MapProps) {
   const ref = useRef<ForceGraphMethods<GNode, GLink>>();
   const { box, size } = useBoxSize();
+  usePauseWhenHidden(ref, active);
   const [hover, setHover] = useState<string | null>(null);
 
   const { data, islands, bounds } = useMemo(() => {

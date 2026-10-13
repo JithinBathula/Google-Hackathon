@@ -41,12 +41,11 @@ export function Successor({ leaver, successor, knowledge, gaps, docs, onBack }: 
     <>
       <section className="succ">
         <header className="succ-head">
+          <button className="back-link" onClick={onBack}><span>←</span> Back to home</button>
           <div className="succ-title">
-            <small>For {successor} · from {leaver.name}, {leaver.role}</small>
             <h1>{first}'s handover</h1>
             <span className="succ-stats">{leaver.documents} documents read · {knowledge.length} things {first} knows · {answers.length} answers from {first}</span>
           </div>
-          <button className="graph-back" onClick={onBack}>← Back to home</button>
         </header>
         <nav className="succ-tabs" role="tablist">
           {TABS.map(([t, label]) => (
@@ -67,9 +66,14 @@ export function Successor({ leaver, successor, knowledge, gaps, docs, onBack }: 
                   <button role="radio" aria-checked={view === "sky"} className={view === "sky" ? "on" : ""} onClick={() => setView("sky")}>Constellation</button>
                 </div>
               </div>
-              {view === "board"
-                ? <Graph knowledge={knowledge} gaps={gaps} query={query} selected={selected} onSelect={setSelected} />
-                : <Constellation knowledge={knowledge} gaps={gaps} query={query} selected={selected} onSelect={setSelected} />}
+              <div className="map-stack">
+                <div className={"map-layer" + (view === "board" ? "" : " off")} aria-hidden={view !== "board"}>
+                  <Graph knowledge={knowledge} gaps={gaps} query={query} selected={selected} onSelect={setSelected} active={view === "board"} />
+                </div>
+                <div className={"map-layer sky" + (view === "sky" ? "" : " off")} aria-hidden={view !== "sky"}>
+                  <Constellation knowledge={knowledge} gaps={gaps} query={query} selected={selected} onSelect={setSelected} active={view === "sky"} />
+                </div>
+              </div>
               <div className="map-key">
                 <span><b className="ok">✓</b> {first} explained it in person{view === "sky" ? " (green ring)" : ""}</span>
                 <span><b className="due-k">30 Nov</b> due date</span>
