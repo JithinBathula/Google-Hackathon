@@ -81,13 +81,15 @@ class Store:
         self._delete("interview")
 
     def restart_handover(self) -> None:
-        """Clear answers, discard review-generated follow-ups, and remove the submission snapshot."""
+        """Clear answers, discard review-generated follow-ups, and remove the submission snapshot.
+        In demo mode, questions answered for the visitor get their answer back."""
         original = []
         for gap in self.gaps():
             if gap.id.startswith("g-review-"):
                 continue
             if gap.status != "dropped":
-                gap.status, gap.answer = "open", None
+                prefilled = gap.demo_answer and not gap.demo_hint
+                gap.status, gap.answer = ("answered", gap.demo_answer) if prefilled else ("open", None)
             original.append(gap)
         self.replace_gaps(original)
         self.delete_handover()

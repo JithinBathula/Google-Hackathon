@@ -201,3 +201,7 @@ class Gap(BaseModel):
     priority: int = Field(ge=1, le=5, description="5 = ask this first")
     status: Literal["open", "answered", "dropped"] = "open"
     answer: str | None = None
+    # Demo only (handover demo-prep): what the leaver remembers, shown to a visitor playing them, and their answer.
+    # A gap with an answer but no hint is answered for the visitor, so the demo asks only the few that matter.
+    demo_hint: str | None = None
+    demo_answer: str | None = None

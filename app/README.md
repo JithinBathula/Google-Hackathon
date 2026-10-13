@@ -89,6 +89,8 @@ uv run handover extract maya-tan --force     # re-run agent 1 on everything (aft
 
 `ingest maya-tan --path <folder>` reads a local folder instead of Drive, for tests without Google.
 
+`demo-prep maya-tan` puts a workspace in demo mode for visitors who don't know the story: Gemini matches each question to the answer key in `demo.py`, the four secrets stay open with Maya's memories shown next to them, and the rest are answered. Restart keeps this setup. Run it again after a sync, which replaces the questions.
+
 Secrets: `.env` holds the API key and OAuth client; the leaver's Google token is written to `.data/<id>/google-token.json`. Both are gitignored. Testing-mode refresh tokens expire after 7 days, so reconnect before a demo.
 
 Quiz and interview answers are saved incrementally in `gaps`. The video-style interview also keeps its timeline and transcript in `interview`. Submitting creates `handover`; Gemini compares the answers with the merged knowledge and either marks it `complete` or appends focused follow-up questions to `gaps`. Locally these are JSON files under `.data/<id>/`; on Cloud Run they are Firestore documents.

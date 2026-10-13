@@ -132,3 +132,30 @@ def test_second_round_checks_only_follow_up_answers_and_third_submit_completes(t
     assert store.handover().status == "complete"
     assert store.handover().rounds == 3
 
+
+def test_prefilled_demo_answers_are_not_reviewed_and_survive_restart(tmp_path: Path):
+    store = _store(tmp_path)
+    gaps = store.gaps()
+    gaps[0].demo_answer = "Orchid double-booked us in 2025."
+    store.replace_gaps(gaps)
+
+    gemini = RecordingGemini([_follow_up("g-venue", "Why Marina?")])
+    assert review_handover(store, gemini) == []
+    assert not hasattr(gemini, "prompt")  # nothing left to check, so Gemini is not called
+
+    store.restart_handover()
+    assert store.gaps()[0].status == "answered"
+    assert store.gaps()[0].answer == "Orchid double-booked us in 2025."
+
+
+def test_follow_up_on_a_demo_question_keeps_its_memories(tmp_path: Path):
+    store = _store(tmp_path)
+    gaps = store.gaps()
+    gaps[0].demo_hint, gaps[0].demo_answer = "Orchid double-booked us", "Orchid double-booked us in 2025."
+    store.replace_gaps(gaps)
+
+    follow_ups = review_handover(store, FakeGemini([_follow_up("g-venue", "Who found out?")]))
+
+    assert follow_ups[0].demo_hint == "Orchid double-booked us"
+    store.restart_handover()
+    assert store.gaps()[0].status == "open"

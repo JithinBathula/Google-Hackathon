@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { Memory } from "./Memory";
 import type { Gap, InterviewState, Knowledge, Leaver } from "./types";
 
 interface Props {
@@ -126,6 +127,8 @@ export function VideoInterview({ leaver, gaps, knowledge, onRefresh, onSubmit }:
   const current = interview?.timeline[interview.current_item];
   const known = current?.knowledge_ids.map((id) => knowledge.find((item) => item.id === id)).filter(Boolean) ?? [];
   const answeredCount = gaps.filter((gap) => gap.status === "answered").length;
+  const asking = gaps.find((gap) => gap.id === interview?.current_gap_id);
+  const first = leaver.name.split(" ")[0];
 
   if (!interview) return <div className="interview-loading"><span className="spinner" /> Loading interview…</div>;
 
@@ -183,6 +186,8 @@ export function VideoInterview({ leaver, gaps, knowledge, onRefresh, onSubmit }:
             <button className="btn primary wide-control" disabled={busy} onClick={playChapter}>{busy ? "Ari is speaking…" : "Play this chapter"}<span>▶</span></button>
           </> : <>
             <div className="asked-question"><span>Ari asks</span><strong>{interview.current_question}</strong><button disabled={busy} onClick={() => speak(interview.current_question || "")}>↻ Replay</button></div>
+            {asking && <Memory gap={asking} name={first} onUse={setTypedAnswer} />}
+            {asking?.demo_hint && interview.turns.length === 0 && <p className="memory-tip">Try a vague answer first, like “not sure, it was just how it was done”, and see what Ari does.</p>}
             <div className="answer-controls">
               <button className={`record-button ${recording ? "recording" : ""}`} disabled={busy} onClick={recording ? stopRecording : startRecording}><i>{recording ? "■" : "●"}</i><span>{recording ? "Stop & send" : "Answer by voice"}</span></button>
               <span className="or">or type</span>

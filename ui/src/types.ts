@@ -14,6 +14,7 @@ export interface Knowledge {
 export interface Gap {
   id: string; question: string; why_it_matters: string; sources: Source[];
   knowledge_ids: string[]; priority: number; status: "open" | "answered" | "dropped"; answer: string | null;
+  demo_hint?: string | null; demo_answer?: string | null;
 }
 
 export interface Doc { id: string; title: string; path: string; kind: string; author: string | null; modified_at: string | null; url: string | null; extracted: boolean }

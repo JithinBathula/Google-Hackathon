@@ -58,8 +58,10 @@ def review_handover(store: Store, gemini: Gemini | None = None, log=print) -> li
     current_gaps = store.gaps()
     by_gap = {g.id: g for g in current_gaps}
     by_knowledge = {k.id: k for k in knowledge}
-    # Round 1 checks every answer; later rounds only the answers to the previous round's follow-ups
+    # Round 1 checks every answer; later rounds only the answers to the previous round's follow-ups.
+    # In demo mode, answers filled in for the visitor are not theirs to defend, so they are not checked.
     to_check = state.answers if state.rounds == 0 else [a for a in state.answers if a.gap_id in state.remaining_gap_ids]
+    to_check = [a for a in to_check if not _prefilled(by_gap.get(a.gap_id))]
 
     try:
         follow_ups = []
@@ -115,6 +117,8 @@ def _to_gaps(items: list[FollowUp], by_gap: dict[str, Gap], by_knowledge: dict[s
         for knowledge_id in knowledge_ids:
             sources.extend(by_knowledge[knowledge_id].sources[:1])
         sources = _unique_sources(sources)
+        # A follow-up on a demo question keeps its memories, so the visitor can still answer as the leaver
+        hint = next((by_gap[i].demo_hint for i in item.source_gap_ids if i in by_gap and by_gap[i].demo_hint), None)
         if not sources and fallback:
             sources = [fallback]
         if not sources:  # A workspace with no evidence cannot produce a source-backed follow-up.
@@ -127,9 +131,14 @@ def _to_gaps(items: list[FollowUp], by_gap: dict[str, Gap], by_knowledge: dict[s
                 sources=sources,
                 knowledge_ids=knowledge_ids,
                 priority=item.priority,
+                demo_hint=hint,
             )
         )
     return out
+
+
+def _prefilled(gap: Gap | None) -> bool:
+    return bool(gap and gap.demo_answer and not gap.demo_hint)
 
 
 def _knowledge_text(item: Knowledge) -> str:

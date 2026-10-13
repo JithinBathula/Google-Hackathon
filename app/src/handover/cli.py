@@ -217,5 +217,14 @@ def push_firestore(leaver_id: str) -> None:
     rprint(f"[green]{leaver_id}[/green] copied to Firestore")
 
 
+@app.command("demo-prep")
+def demo_prep(leaver_id: str) -> None:
+    """Demo mode: keep only the four secrets open, with the leaver's memories shown; answer the rest. Restarts the
+    handover. Run again after every sync, since a sync replaces the gaps."""
+    from handover.demo import prepare_demo
+
+    prepare_demo(_store(leaver_id), log=rprint)
+
+
 if __name__ == "__main__":
     app()
