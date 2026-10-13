@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     google_cloud_location: str = "asia-southeast1"
     # Verified at https://ai.google.dev/gemini-api/docs/models on 2026-10-08
     gemini_model: str = "gemini-3.8-flash"
+    gemini_tts_model: str = "gemini-3.8-flash-tts"
+    gemini_voice: str = "Kore"
 
     # Google OAuth client (Google Auth Platform → Clients), for Drive and Calendar access
     google_client_id: str | None = None

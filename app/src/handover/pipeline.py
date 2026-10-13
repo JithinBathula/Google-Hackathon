@@ -72,6 +72,10 @@ def sync(store: Store, log: Log = print) -> None:
         if ran:
             step("consolidating")
             consolidate_all(store, leaver, gemini, log)
+            handover = store.handover()
+            handover.status, handover.completed_at = "draft", None
+            handover.remaining_gap_ids = [g.id for g in store.gaps() if g.status == "open"]
+            store.save_handover(handover)
         leaver.sync.state = "done"
     except Exception as e:
         leaver.sync.state, leaver.sync.error = "error", str(e)

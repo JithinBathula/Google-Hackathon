@@ -23,7 +23,7 @@ Drive + Calendar ──> documents ──> [1 extractor] ──> raw items, raw 
 2. **Consolidator** merges the raw items of each type into one item per real thing, keeping every raw item as a source. Then one call over all merged items adds typed links (decided_by, owned_by, about, blocks, follows, supersedes) and raises a gap for any contradiction.
 3. **Gap auditor** takes the raw gaps plus the merged knowledge: drops gaps the knowledge answers, merges duplicates, adds a question for every decision or rule with no stated reason, links each gap to the knowledge it is about, and ranks by priority.
 
-Stored in `.data/<name>/`: `documents`, `raw_knowledge`, `raw_gaps` (the evidence layer), `knowledge` and `gaps` (the merged layer everything downstream reads). On Maya's nine documents: 108 raw items and 23 raw gaps become 37 knowledge items with 49 links and 13 questions.
+Stored in `.data/<name>/`: `documents`, `raw_knowledge`, `raw_gaps` (the evidence layer), `knowledge` and `gaps` (the merged layer everything downstream reads). The written submission is saved in `handover.json`; progress through the conversational flow is saved in `interview.json`. On Maya's nine documents: 108 raw items and 23 raw gaps become 37 knowledge items with 49 links and 13 questions.
 
 Files:
 ```
@@ -36,7 +36,8 @@ src/handover/
   extract.py        agent 1: per-document extraction into the raw layer
   consolidate.py    agent 2: merge across documents, link, spot contradictions
   audit_gaps.py     agent 3: merge, filter and rank the gaps
-  llm/gemini.py     Gemini client
+  interview.py      chronological interview plan, answer checks, and adaptive follow-up questions
+  llm/gemini.py     Gemini structured-output and text-to-speech client
   ingest/text.py    cleans Drive's Markdown export
   sources/google_auth.py   OAuth: consent URL, code exchange, token refresh; token stored per leaver
   sources/google_drive.py  reads the leaver's Drive (Docs, Sheets, Slides) and Calendar
@@ -61,6 +62,13 @@ open http://localhost:8080/docs
 | `GET /leavers`, `GET /leavers/{id}` | Name, role, last day, connected email, counts, sync state |
 | `GET /auth/google/start?leaver={id}` | Redirect to Google's consent screen; the callback stores the token |
 | `POST /leavers/{id}/sync` | Read Drive and Calendar, extract what changed, consolidate. Background; poll `GET /leavers/{id}` for `sync.state` |
+| `POST /leavers/{id}/submit` | Snapshot all quiz answers, review them with Gemini, and unlock onboarding if no essential gaps remain |
+| `DELETE /leavers/{id}/handover` | Restart: delete `handover.json` and `interview.json`, clear answers, and remove review-generated follow-ups |
+| `GET /leavers/{id}/interview` | Read persistent progress through the conversational interview |
+| `POST /leavers/{id}/interview/start` | Ask Gemini to arrange the known context and open gaps into a flexible chronological conversation |
+| `POST /leavers/{id}/interview/advance` | Move from one narrated chapter to its embedded question or the next chapter |
+| `POST /leavers/{id}/interview/answer` | Accept text or base64 audio; Gemini transcribes/evaluates it and asks a focused follow-up when needed |
+| `POST /leavers/{id}/interview/speak` | Turn an interview passage into WAV audio with Gemini text-to-speech |
 | `GET /leavers/{id}/documents`, `/documents/{doc_id}` | Documents without text; one document with text and Drive link |
 | `GET /leavers/{id}/knowledge?type=decision` | Merged knowledge, most sources first |
 | `GET /leavers/{id}/gaps?status=open` | Merged gaps |
@@ -81,3 +89,5 @@ uv run handover extract maya-tan --force     # re-run agent 1 on everything (aft
 `ingest maya-tan --path <folder>` reads a local folder instead of Drive, for tests without Google.
 
 Secrets: `.env` holds the API key and OAuth client; the leaver's Google token is written to `.data/<id>/google-token.json`. Both are gitignored. Testing-mode refresh tokens expire after 7 days, so reconnect before a demo.
+
+Quiz and interview answers are saved incrementally in `gaps.json`. The video-style interview also keeps its timeline and transcript in `interview.json`. Submitting creates `handover.json`; Gemini compares the answers with the merged knowledge and either marks it `complete` or appends focused follow-up questions to `gaps.json`.

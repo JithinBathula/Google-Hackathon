@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from handover.models import Document, Gap, Knowledge, Leaver, RawGap, RawKnowledge
+from handover.models import Document, Gap, HandoverState, InterviewState, Knowledge, Leaver, RawGap, RawKnowledge
 
 
 class Store:
@@ -36,6 +36,43 @@ class Store:
         p = self.dir / "google-token.json"
         p.write_text(json.dumps(token))
         p.chmod(0o600)
+
+    # ---- submitted handover ----
+    def handover(self) -> HandoverState:
+        """The quiz submission/review state. Old workspaces begin as a draft."""
+        p = self.dir / "handover.json"
+        return HandoverState.model_validate_json(p.read_text()) if p.exists() else HandoverState()
+
+    def save_handover(self, handover: HandoverState) -> None:
+        (self.dir / "handover.json").write_text(handover.model_dump_json(indent=1))
+
+    def delete_handover(self) -> None:
+        """Remove the submitted handover snapshot, if one exists."""
+        (self.dir / "handover.json").unlink(missing_ok=True)
+
+    # ---- AI-led interview ----
+    def interview(self) -> InterviewState:
+        p = self.dir / "interview.json"
+        return InterviewState.model_validate_json(p.read_text()) if p.exists() else InterviewState()
+
+    def save_interview(self, interview: InterviewState) -> None:
+        (self.dir / "interview.json").write_text(interview.model_dump_json(indent=1))
+
+    def delete_interview(self) -> None:
+        (self.dir / "interview.json").unlink(missing_ok=True)
+
+    def restart_handover(self) -> None:
+        """Clear answers, discard review-generated follow-ups, and remove the submission snapshot."""
+        original = []
+        for gap in self.gaps():
+            if gap.id.startswith("g-review-"):
+                continue
+            if gap.status != "dropped":
+                gap.status, gap.answer = "open", None
+            original.append(gap)
+        self.replace_gaps(original)
+        self.delete_handover()
+        self.delete_interview()
 
     # ---- documents ----
     def documents(self) -> list[Document]:
