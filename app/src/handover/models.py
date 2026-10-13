@@ -40,6 +40,7 @@ class HandoverState(BaseModel):
     completed_at: datetime | None = None
     answers: list[HandoverAnswer] = Field(default_factory=list)
     remaining_gap_ids: list[str] = Field(default_factory=list)
+    rounds: int = 0  # reviews run since the last restart or sync
     error: str | None = None
 
 

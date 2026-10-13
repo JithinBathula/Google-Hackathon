@@ -131,10 +131,13 @@ def submit_handover(leaver_id: str, background: BackgroundTasks) -> HandoverStat
     if not store.knowledge():
         raise HTTPException(409, "sync and consolidate the knowledge before submitting")
 
+    previous = store.handover()
     state = HandoverState(
         status="reviewing",
         submitted_at=datetime.now(UTC),
         answers=[HandoverAnswer(gap_id=g.id, question=g.question, answer=g.answer or "") for g in gaps],
+        remaining_gap_ids=previous.remaining_gap_ids,  # the last review's follow-ups, which the next one re-checks
+        rounds=previous.rounds,
     )
     store.save_handover(state)
     background.add_task(review_handover, store)

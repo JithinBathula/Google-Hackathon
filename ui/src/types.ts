@@ -22,7 +22,7 @@ export interface HandoverState {
   status: "draft" | "reviewing" | "needs_answers" | "complete" | "error";
   submitted_at: string | null; reviewed_at: string | null; completed_at: string | null;
   answers: { gap_id: string; question: string; answer: string }[];
-  remaining_gap_ids: string[]; error: string | null;
+  remaining_gap_ids: string[]; rounds: number; error: string | null;
 }
 
 export interface InterviewChapter {

@@ -9,14 +9,20 @@ from handover.llm.gemini import Gemini
 from handover.models import Gap, Knowledge, Source
 from handover.store import Store
 
+# The first review checks every answer; the second checks only the answers to its follow-ups. A third submit
+# completes without asking again, so the leaver is never stuck in an endless loop of new questions.
+MAX_ROUNDS = 2
+
 SYSTEM = """You are doing the final quality check on a departing employee's knowledge handover.
-You receive the consolidated knowledge base and every question the employee answered.
+You receive the consolidated knowledge base and the answers to check.
 
 Return only gaps that still prevent a successor from taking over safely:
 - Ask a follow-up when an answer is empty in substance, evasive, contradicts the knowledge, or introduces an important
   dependency without explaining it.
 - Do not ask for details a successor can infer from the supplied knowledge or answer.
 - Do not reopen a question that was answered clearly enough to act on.
+- Only follow up on the answers below. Do not raise new topics from the knowledge base; if the answers are usable,
+  the handover is complete even if more detail could exist somewhere.
 - Each question must be concrete, addressed to the departing employee, and answerable in a few sentences.
 - `source_gap_ids` must use only answer ids below. `knowledge_ids` must use only knowledge ids below.
 - Priority is 1 to 5, where 5 could block work after the employee leaves.
@@ -27,7 +33,7 @@ PROMPT = """Consolidated knowledge:
 
 {knowledge}
 
-Submitted answers:
+Answers to check:
 
 {answers}
 """
@@ -52,22 +58,25 @@ def review_handover(store: Store, gemini: Gemini | None = None, log=print) -> li
     current_gaps = store.gaps()
     by_gap = {g.id: g for g in current_gaps}
     by_knowledge = {k.id: k for k in knowledge}
+    # Round 1 checks every answer; later rounds only the answers to the previous round's follow-ups
+    to_check = state.answers if state.rounds == 0 else [a for a in state.answers if a.gap_id in state.remaining_gap_ids]
 
     try:
-        prompt = PROMPT.format(
-            knowledge="\n".join(_knowledge_text(k) for k in knowledge) or "(none)",
-            answers="\n\n".join(
-                f"[{a.gap_id}] {a.question}\nAnswer: {a.answer}" for a in state.answers
-            ) or "(none)",
-        )
-        result = (gemini or Gemini()).generate_structured(prompt, ReviewResult, system=SYSTEM)
-        follow_ups = _to_gaps(result.remaining_gaps, by_gap, by_knowledge)
+        follow_ups = []
+        if state.rounds < MAX_ROUNDS and to_check:
+            prompt = PROMPT.format(
+                knowledge="\n".join(_knowledge_text(k) for k in knowledge) or "(none)",
+                answers="\n\n".join(f"[{a.gap_id}] {a.question}\nAnswer: {a.answer}" for a in to_check),
+            )
+            result = (gemini or Gemini()).generate_structured(prompt, ReviewResult, system=SYSTEM)
+            follow_ups = _to_gaps(result.remaining_gaps, by_gap, by_knowledge, {a.gap_id for a in to_check})
 
         # Every existing answer remains part of the record; follow-ups are appended as new open questions.
         existing = [g for g in current_gaps if g.id not in {x.id for x in follow_ups}]
         store.replace_gaps(existing + follow_ups)
 
         now = datetime.now(UTC)
+        state.rounds += 1
         state.reviewed_at = now
         state.remaining_gap_ids = [g.id for g in follow_ups]
         state.error = None
@@ -87,13 +96,17 @@ def review_handover(store: Store, gemini: Gemini | None = None, log=print) -> li
         return []
 
 
-def _to_gaps(items: list[FollowUp], by_gap: dict[str, Gap], by_knowledge: dict[str, Knowledge]) -> list[Gap]:
+def _to_gaps(items: list[FollowUp], by_gap: dict[str, Gap], by_knowledge: dict[str, Knowledge],
+             checked: set[str]) -> list[Gap]:
+    """Follow-ups that point at an answer we checked; anything else is a new topic and is dropped."""
     out = []
     fallback = next(
         (source for gap in by_gap.values() for source in gap.sources),
         next((source for item in by_knowledge.values() for source in item.sources), None),
     )
     for item in items[:5]:
+        if not checked & set(item.source_gap_ids):
+            continue
         knowledge_ids = [i for i in item.knowledge_ids if i in by_knowledge]
         sources = []
         for gap_id in item.source_gap_ids:
