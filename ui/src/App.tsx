@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { BenIntro } from "./BenIntro";
 import { Intro } from "./Intro";
 import { Landing, SuccessorGate } from "./Landing";
 import { LeaverView } from "./LeaverView";
@@ -11,7 +12,7 @@ const LEAVER_ID = "maya-tan";
 const SUCCESSOR = "Ben Ong";
 const INTRO_SEEN = "handover.introSeen";
 
-type View = "intro" | "landing" | "leaver" | "successor";
+type View = "intro" | "landing" | "leaver" | "successor" | "ben-intro";
 
 function introSeen(): boolean {
   try { return localStorage.getItem(INTRO_SEEN) === "1"; } catch { return false; }
@@ -53,7 +54,7 @@ export default function App() {
   const choose = (next: View) => {
     setView(next);
     const url = new URL(location.href);
-    if (next === "landing" || next === "intro") url.searchParams.delete("as");
+    if (next === "landing" || next === "intro" || next === "ben-intro") url.searchParams.delete("as");
     else url.searchParams.set("as", next);
     history.replaceState(null, "", url);
   };
@@ -70,6 +71,11 @@ export default function App() {
   if (view === "intro") return <Intro onStart={() => { markIntroSeen(); choose("leaver"); }} onSkip={() => { markIntroSeen(); choose("landing"); }} />;
   if (error) return <div className="empty" style={{ paddingTop: 120 }}>Can't reach the API.<small>Start it with <code>uv run uvicorn handover.api:app --port 8080</code> in app/, then reload. ({error})</small></div>;
   if (!leaver) return <div className="loading-page"><span>Hand<i>over</i></span></div>;
+  // After Maya's handover, a few slides lead into Ben's page, opening the tab the visitor picks
+  if (view === "ben-intro") return <BenIntro leaver={leaver} knowledge={knowledge} gaps={gaps} onOpen={(tab) => {
+    const url = new URL(location.href); url.searchParams.set("tab", tab); history.replaceState(null, "", url);
+    choose("successor");
+  }} />;
   if (view === "landing") return <><Landing leaver={leaver} gaps={gaps} successorName={SUCCESSOR} onChoose={choose} onReplay={() => choose("intro")} /><WhosWho /></>;
   return (
     <div className="app">
@@ -79,7 +85,7 @@ export default function App() {
           ? leaver.handover.status === "complete"
             ? <Successor leaver={leaver} successor={SUCCESSOR} knowledge={knowledge} gaps={gaps} docs={docs} onBack={() => choose("landing")} />
             : <SuccessorGate leaver={leaver} gaps={gaps} onBack={() => choose("landing")} onSwitch={() => choose("leaver")} />
-          : <LeaverView leaver={leaver} gaps={gaps} knowledge={knowledge} docs={docs} onBack={() => choose("landing")} onRestart={restart} onRefresh={load} onSubmit={submit} onOpenSuccessor={() => choose("successor")} onAnswered={(g) => setGaps((all) => all.map((x) => (x.id === g.id ? g : x)))} />}
+          : <LeaverView leaver={leaver} gaps={gaps} knowledge={knowledge} docs={docs} onBack={() => choose("landing")} onRestart={restart} onRefresh={load} onSubmit={submit} onOpenSuccessor={() => choose("ben-intro")} onAnswered={(g) => setGaps((all) => all.map((x) => (x.id === g.id ? g : x)))} />}
       </main>
     </div>
   );

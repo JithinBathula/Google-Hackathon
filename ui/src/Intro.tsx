@@ -1,37 +1,11 @@
-import { type ReactNode, useEffect, useState } from "react";
-import { WhosWho } from "./WhosWho";
+import { PersonCard, Scene, SlideDeck } from "./Slides";
 
 interface Props { onStart: () => void; onSkip: () => void }
 
 const SCENES = ["The problem", "Handover", "Example", "The gap", "Already done", "Your turn"];
 
 export function Intro({ onStart, onSkip }: Props) {
-  const [scene, setScene] = useState(0);
-  const last = scene === SCENES.length - 1;
-  const at = SCENES[scene];
-  const next = () => (last ? onStart() : setScene(scene + 1));
-  const back = () => setScene(Math.max(0, scene - 1));
-
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") setScene((s) => Math.min(SCENES.length - 1, s + 1));
-      if (e.key === "ArrowLeft") setScene((s) => Math.max(0, s - 1));
-    };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, []);
-
-  return (
-    <main className="intro">
-      <header className="intro-top">
-        <div className="wordmark">Hand<i>over</i></div>
-        <div className="intro-top-actions">
-          <WhosWho inline />
-          <button className="intro-skip" onClick={onSkip}>Skip the story <span>→</span></button>
-        </div>
-      </header>
-
-      <div className="intro-stage" key={scene}>
+  return <SlideDeck names={SCENES} doneLabel="Start as Maya" onDone={onStart} skipLabel="Skip the story" onSkip={onSkip} render={(at) => <>
         {at === "The problem" && <Scene
           eyebrow="The problem"
           title={<>When people leave, what they know <em>leaves with them.</em></>}
@@ -115,39 +89,5 @@ export function Intro({ onStart, onSkip }: Props) {
             </div>
           </div>}
         />}
-      </div>
-
-      <footer className="intro-nav">
-        <div className="intro-dots" role="tablist" aria-label="Story">
-          {SCENES.map((name, i) => <button key={name} role="tab" aria-selected={i === scene} aria-label={name} className={i === scene ? "on" : i < scene ? "done" : ""} onClick={() => setScene(i)} />)}
-        </div>
-        <div className="intro-buttons">
-          {scene > 0 && <button className="btn" onClick={back}>Back</button>}
-          <button className="btn primary" onClick={next}>{last ? "Start as Maya" : "Next"} <span aria-hidden>→</span></button>
-        </div>
-      </footer>
-    </main>
-  );
-}
-
-function Scene({ eyebrow, title, body, visual }: { eyebrow: string; title: ReactNode; body?: ReactNode; visual: ReactNode }) {
-  return (
-    <section className="intro-scene">
-      <div className="intro-copy">
-        <div className="eyebrow">{eyebrow}</div>
-        <h1>{title}</h1>
-        {body && <p>{body}</p>}
-      </div>
-      <div className="intro-visual">{visual}</div>
-    </section>
-  );
-}
-
-function PersonCard({ initials, name, role, tone, facts }: { initials: string; name: string; role: string; tone: "leaver" | "successor"; facts: [string, string][] }) {
-  return (
-    <div className={`intro-person ${tone}`}>
-      <div className="intro-person-head"><span className="intro-avatar">{initials}</span><div><b>{name}</b><small>{role}</small></div></div>
-      <dl>{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-    </div>
-  );
+  </>} />;
 }
