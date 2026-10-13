@@ -3,7 +3,7 @@ import { WhosWho } from "./WhosWho";
 
 interface Props { onStart: () => void; onSkip: () => void }
 
-const SCENES = ["The problem", "Handover", "Example", "The gap", "Your turn"];
+const SCENES = ["The problem", "Handover", "Example", "The gap", "Already done", "Your turn"];
 
 export function Intro({ onStart, onSkip }: Props) {
   const [scene, setScene] = useState(0);
@@ -37,32 +37,26 @@ export function Intro({ onStart, onSkip }: Props) {
           title={<>When people leave, what they know <em>leaves with them.</em></>}
           body={<>Documents keep the <b>what</b>. The <b>why</b> lives in someone's head.</>}
           visual={<div className="intro-split">
-            <div className="intro-split-head"><span>In the documents</span><span>Leaves with them</span></div>
-            {[
-              ["Book Hotel A", "Hotel B double-booked us once"],
-              ["Never email the venue manager", "He doesn't read email"],
-              ["Invite guests after the speaker confirms", "Last time the speaker cancelled"],
-            ].map(([what, why]) => <div className="intro-split-row" key={what}><span>{what}</span><i aria-hidden>→</i><span>{why}</span></div>)}
+            <div className="intro-split-head"><span>In the documents</span><span>Why?</span></div>
+            {["Book Hotel A, not Hotel B", "Never email the venue manager", "Invite guests only after the speaker confirms"].map((what) =>
+              <div className="intro-split-row" key={what}><span>{what}</span><i aria-hidden>→</i><span className="intro-redacted"><b /><small>Only in their head</small></span></div>)}
           </div>}
         />}
         {at === "Handover" && <Scene
           eyebrow="Meet Handover"
           title={<>An AI that gets it <em>before they go.</em></>}
           body={<>It reads everything first, so it only asks about what's really missing.</>}
-          visual={<div className="intro-funnel">
+          visual={<div className="intro-chart">
+            <div className="intro-chart-end">Their documents and calendar</div>
             {[
-              ["8 + 14", "documents and calendar events", "read"],
-              ["111", "facts pulled out, each with its source", "extract"],
-              ["34", "things they know, merged and linked", "connect"],
-              ["12", "questions no document answers", "find gaps"],
-            ].map(([n, label, step], i) => <div className="intro-funnel-row" key={step} style={{ width: `${100 - i * 6}%` }}>
-              <b>{n}</b><span>{label}</span><small>{step}</small>
-            </div>)}
-            <div className="intro-funnel-end">
-              <div><b>Interviews her</b><span>by voice, and pushes back on vague answers</span></div>
-              <div><b>Checks the result</b><span>before the successor gets it</span></div>
-            </div>
-            <div className="intro-funnel-foot">Numbers from the example you are about to see. Every step runs on Gemini.</div>
+              ["Extract", "pulls out decisions, rules, people and open work"],
+              ["Connect", "merges what overlaps, links what's related"],
+              ["Find gaps", "spots what the documents never explain"],
+              ["Interview", "asks the leaver, by voice, and pushes back on vague answers", "ask"],
+              ["Check", "makes sure nothing important is still missing", "ask"],
+            ].map(([step, what, kind]) => <div className={`intro-chart-node ${kind ?? ""}`} key={step}><b>{step}</b><span>{what}</span></div>)}
+            <div className="intro-chart-end out">A map for the person taking over, with every why</div>
+            <small className="intro-chart-foot">Every step runs on Gemini.</small>
           </div>}
         />}
         {at === "Example" && <Scene
@@ -95,14 +89,31 @@ export function Intro({ onStart, onSkip }: Props) {
             <div className="intro-thought"><span className="intro-avatar">BO</span><p>“Orchid is cheaper and better. I'll switch.”<small>Ben, on his first week</small></p></div>
           </div>}
         />}
+        {at === "Already done" && <Scene
+          eyebrow="Before you start"
+          title={<>We've already read <em>Maya's documents.</em></>}
+          body={<>To save you time, we connected her Google Drive and calendar and ran these steps in advance. The questions are ready.</>}
+          visual={<ol className="intro-checklist">
+            <li className="done"><i>✓</i><div><b>Connected</b><span>Maya's Google Drive and calendar</span></div></li>
+            <li className="done"><i>✓</i><div><b>Extracted</b><span>Her decisions, rules, contacts and open tasks</span></div></li>
+            <li className="done"><i>✓</i><div><b>Found the gaps</b><span>The questions her documents don't answer</span></div></li>
+            <li className="next"><i>→</i><div><b>Next: you</b><span>Answer those questions as Maya</span></div></li>
+          </ol>}
+        />}
         {at === "Your turn" && <Scene
           eyebrow="Your turn"
           title={<>Now <em>you're</em> Maya.</>}
-          body={<>Our AI interviewer asks what only she knows. Her memories are on screen. Answer in your own words.</>}
-          visual={<ol className="intro-flow">
-            <li><span>01</span><b>Be Maya</b><small>answer 4 questions, by voice or text</small></li>
-            <li><span>02</span><b>Be Ben</b><small>see what he gets</small></li>
-          </ol>}
+          body={<>Answer her questions in your own words, by voice or text. Then switch to Ben and see what he gets.</>}
+          visual={<div className="intro-turn">
+            <ol className="intro-flow">
+              <li><span>01</span><b>Be Maya</b><small>answer 4 questions</small></li>
+              <li><span>02</span><b>Be Ben</b><small>see what he gets</small></li>
+            </ol>
+            <div className="intro-demo-note">
+              <small>Demo help</small>
+              <p>Each question includes notes on <b>what Maya remembers</b> to guide your answer. <b>Use Maya's answer</b> fills in a complete answer for you.</p>
+            </div>
+          </div>}
         />}
       </div>
 

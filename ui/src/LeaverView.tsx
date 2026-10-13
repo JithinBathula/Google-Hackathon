@@ -26,7 +26,6 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
   const forYou = answered.filter(prefilled);
   const first = leaver.name.split(" ")[0];
   const docById = new Map(docs.map((d) => [d.id, d]));
-  const kById = new Map(knowledge.map((k) => [k.id, k]));
 
   const submit = async () => {
     setSubmitting(true); setSubmitError(null);
@@ -63,20 +62,19 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
       </nav>
       {mode === "interview" ? <VideoInterview leaver={leaver} gaps={gaps} knowledge={knowledge} onRefresh={onRefresh} onSubmit={onSubmit} /> : <>
       <div className="quiz-kicker">Your handover · {answered.length}/{answered.length + open.length} answered</div>
-      <h1>Hi {first}. A few things only you can answer.</h1>
-      <p className="sub">I read {leaver.documents} documents and your calendar. Most of it is clear. These {open.length} questions are where the documents go quiet.</p>
+      <h1>{open.length ? `Hi ${first}, please answer ${open.length === 1 ? "this question" : `these ${open.length} questions`}.` : `Thanks, ${first}. That's everything.`}</h1>
       {leaver.handover.status === "needs_answers" && <div className="review-note"><b>Gemini found {open.length} follow-up {open.length === 1 ? "question" : "questions"}.</b><span>Answer these, then submit again to finish the handover.</span></div>}
-      {open.map((g) => <Card key={g.id} gap={g} leaverId={leaver.id} docById={docById} kById={kById} onAnswered={onAnswered} first={first} />)}
+      {open.map((g, i) => <Card key={g.id} label={`Question ${i + 1} of ${open.length}`} gap={g} leaverId={leaver.id} docById={docById} onAnswered={onAnswered} first={first} />)}
       {open.length === 0 && leaver.handover.status === "reviewing" && <div className="submit-panel reviewing"><span className="spinner" /><div><h2>Reviewing your handover</h2><p>Gemini is checking your answers against the documents for anything important that is still missing.</p></div></div>}
       {open.length === 0 && leaver.handover.status === "complete" && <div className="submit-panel complete"><span className="complete-mark">✓</span><div><h2>Handover complete</h2><p>Your answers passed the final review. The onboarding workspace is now unlocked.</p></div></div>}
       {open.length === 0 && !["reviewing", "complete"].includes(leaver.handover.status) && <div className="submit-panel"><div><span className="eyebrow">Ready for final review</span><h2>Every question has an answer.</h2><p>Submit your handover and Gemini will compare the answers with the source context. If anything essential is still unclear, you’ll get a short follow-up.</p>{(submitError || leaver.handover.error) && <span className="form-error">{submitError || leaver.handover.error}</span>}</div><button className="btn primary submit-btn" disabled={submitting} onClick={submit}>{submitting ? "Submitting…" : "Submit handover"}<i>→</i></button></div>}
       {yours.length > 0 && <>
         <div className="section">Answered ({yours.length})</div>
-        {yours.map((g) => <Card key={g.id} gap={g} leaverId={leaver.id} docById={docById} kById={kById} onAnswered={onAnswered} first={first} />)}
+        {yours.map((g) => <Card key={g.id} gap={g} leaverId={leaver.id} docById={docById} onAnswered={onAnswered} first={first} />)}
       </>}
       {forYou.length > 0 && <details className="prefilled">
         <summary>{forYou.length} more questions were answered for you, to keep the demo short</summary>
-        {forYou.map((g) => <Card key={g.id} gap={g} leaverId={leaver.id} docById={docById} kById={kById} onAnswered={onAnswered} first={first} />)}
+        {forYou.map((g) => <Card key={g.id} gap={g} leaverId={leaver.id} docById={docById} onAnswered={onAnswered} first={first} />)}
       </details>}
       <div className="section">What I read</div>
       <div className="docs">
@@ -87,7 +85,7 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
   );
 }
 
-function Card({ gap, leaverId, docById, kById, onAnswered, first }: { gap: Gap; leaverId: string; docById: Map<string, Doc>; kById: Map<string, Knowledge>; onAnswered: (g: Gap) => void; first: string }) {
+function Card({ gap, label, leaverId, docById, onAnswered, first }: { gap: Gap; label?: string; leaverId: string; docById: Map<string, Doc>; onAnswered: (g: Gap) => void; first: string }) {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -97,23 +95,25 @@ function Card({ gap, leaverId, docById, kById, onAnswered, first }: { gap: Gap; 
     catch (e) { setSaveError(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   };
+  const sourceDocs = [...new Set(gap.sources.map((s) => docById.get(s.document_id)?.title).filter(Boolean))];
   return (
     <div className={"qcard" + (gap.status === "answered" ? " answered" : "")}>
-      <div className="meta">
-        <span className="pri">{[1, 2, 3, 4, 5].map((i) => <i key={i} className={i <= gap.priority ? "on" : ""} />)}</span>
-        {gap.knowledge_ids.map((id) => kById.get(id) && <span className="chip" key={id}>{kById.get(id)!.title}</span>)}
-      </div>
+      {label && <div className="q-label">{label}</div>}
       <div className="q">{gap.question}</div>
-      <div className="why">{gap.why_it_matters}</div>
-      <details className="evidence"><summary>Where this came from · {gap.sources.length} {gap.sources.length === 1 ? "place" : "places"}</summary>
+      <div className="q-why"><span>Why it matters</span>{gap.why_it_matters}</div>
+      <details className="evidence"><summary>Source: {sourceDocs.join(", ") || "her documents"}</summary>
         {gap.sources.map((s) => { const d = docById.get(s.document_id); return <div className="quote" key={s.raw_id}>“{s.quote}”{d && <a href={d.url ?? "#"} target="_blank" rel="noreferrer">{d.title} ↗</a>}</div>; })}
       </details>
-      {gap.status === "answered" ? <div className="answer">{gap.answer}</div> : <>
-        <Memory gap={gap} name={first} onUse={setText} />
-        <textarea placeholder="Type it the way you'd say it. Short is fine." value={text} onChange={(e) => setText(e.target.value)} />
-        {saveError && <span className="form-error">{saveError}</span>}
-        <div className="actions"><button className="btn primary" disabled={!text.trim() || saving} onClick={save}>{saving ? "Saving…" : "Save answer"}</button></div>
-      </>}
+      {gap.status === "answered" ? <div className="answer">{gap.answer}</div> :
+        <div className={"q-answer" + (gap.demo_hint ? " with-notes" : "")}>
+          <div className="q-input">
+            <label htmlFor={`answer-${gap.id}`}>Your answer</label>
+            <textarea id={`answer-${gap.id}`} placeholder="Answer in your own words. A few sentences is enough." value={text} onChange={(e) => setText(e.target.value)} />
+            {saveError && <span className="form-error">{saveError}</span>}
+            <div className="actions"><button className="btn primary" disabled={!text.trim() || saving} onClick={save}>{saving ? "Saving…" : "Save answer"}</button></div>
+          </div>
+          <Memory gap={gap} name={first} onUse={setText} />
+        </div>}
     </div>
   );
 }
