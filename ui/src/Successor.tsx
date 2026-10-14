@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { Ask, type Message } from "./Ask";
 import { Connect } from "./Connect";
 import { Constellation } from "./Constellation";
@@ -189,6 +189,12 @@ function HomeDashboard({ leaver, knowledge, docs, gaps, viewer }: { leaver: Leav
   const notes = knowledge.filter((item) => item.type === "unfinished" || item.working_notes).slice(0, 3);
   const openGaps = gaps.filter((gap) => gap.status === "open").length;
   const readiness = Math.round(((knowledge.length + docs.length) / Math.max(1, knowledge.length + docs.length + openGaps)) * 100);
+  const answeredGaps = gaps.filter((gap) => gap.status === "answered").length;
+  const workstreams = Array.from(new Set(docs.map((doc) => doc.path.split("/")[0]))).slice(0, 4).map((project) => ({
+    project,
+    count: knowledge.filter((item) => item.sources.some((source) => docs.find((doc) => doc.id === source.document_id)?.path.startsWith(project))).length,
+  }));
+  const maxWorkstream = Math.max(1, ...workstreams.map((stream) => stream.count));
   const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value)) : "";
 
   return <div className="home-dashboard">
@@ -199,6 +205,24 @@ function HomeDashboard({ leaver, knowledge, docs, gaps, viewer }: { leaver: Leav
       <div className="home-metric"><small>{viewer === "maya" ? "Context captured" : "Maya's knowledge"}</small><strong>{knowledge.length}</strong><span>Decisions, rules & work</span></div>
       <div className="home-metric readiness-metric"><small>{viewer === "maya" ? "Handover readiness" : "Ready to pick up"}</small><strong>{readiness}%</strong><span>{openGaps ? (viewer === "maya" ? `${openGaps} questions for you` : `${openGaps} gaps to clarify`) : "No open questions"}</span><i style={{ width: `${readiness}%` }} /></div>
     </div>
+    <section className="home-infographics" aria-label="Handover overview">
+      <div className="infographic-card readiness-visual">
+        <div className="infographic-copy"><span className="eyebrow">Readiness signal</span><h3>{viewer === "maya" ? "Ready to hand over" : "Ready to pick up"}</h3><p>{openGaps ? `${openGaps} ${openGaps === 1 ? "area needs" : "areas need"} attention.` : "The context is in good shape."}</p></div>
+        <div className="readiness-ring" style={{ "--readiness": `${readiness * 3.6}deg` } as CSSProperties}><strong>{readiness}%</strong><span>covered</span></div>
+      </div>
+      <div className="infographic-card stream-visual">
+        <div className="infographic-head"><div><span className="eyebrow">{viewer === "maya" ? "Your focus" : "Maya's focus"}</span><h3>Workstream weight</h3></div><span className="infographic-total">{knowledge.length} items</span></div>
+        <div className="stream-bars">{workstreams.length ? workstreams.map((stream, index) => <div className="stream-bar-row" key={stream.project}><span title={stream.project}>{stream.project}</span><div><i className={`bar-${index % 4}`} style={{ width: `${Math.max(12, (stream.count / maxWorkstream) * 100)}%` }} /></div><b>{stream.count}</b></div>) : <div className="home-empty">No workstream data yet.</div>}</div>
+      </div>
+      <div className="infographic-card path-visual">
+        <div className="infographic-head"><div><span className="eyebrow">Transition path</span><h3>{viewer === "maya" ? "Your handover" : "Maya → Ben"}</h3></div><span className="infographic-total">{answeredGaps}/{gaps.length || 0}</span></div>
+        <div className="handover-path">
+          <div className={docs.length ? "path-step done" : "path-step"}><i>1</i><span>Sources</span></div><b className={knowledge.length ? "path-line done" : "path-line"} />
+          <div className={knowledge.length ? "path-step done" : "path-step"}><i>2</i><span>Context</span></div><b className={answeredGaps ? "path-line done" : "path-line"} />
+          <div className={answeredGaps || !gaps.length ? "path-step done" : "path-step"}><i>3</i><span>{viewer === "maya" ? "Ready" : "Pick up"}</span></div>
+        </div>
+      </div>
+    </section>
     <div className="home-grid">
       <section className="home-card timeline-card"><div className="home-card-head"><div><span className="eyebrow">{viewer === "maya" ? "Your activity" : "Maya's activity"}</span><h3>{timelineMode === "past" ? (viewer === "maya" ? "Your past month" : "What Maya has been doing") : (viewer === "maya" ? "Your upcoming handover work" : "What Ben needs to pick up")}</h3></div><div className="timeline-toggle"><button className={timelineMode === "past" ? "on" : ""} onClick={() => setTimelineMode("past")}>Past month</button><button className={timelineMode === "upcoming" ? "on" : ""} onClick={() => setTimelineMode("upcoming")}>Upcoming</button></div></div>
         {timeline.length ? <div className="timeline">{timeline.map((doc) => <div className="timeline-item" key={doc.id}><span className="timeline-dot" /><div><small>{formatDate(doc.modified_at)} · {doc.kind}</small><b>{doc.title}</b><p>{doc.path}</p></div></div>)}</div> : <div className="home-empty">No dated activity found.</div>}
@@ -212,7 +236,7 @@ function HomeDashboard({ leaver, knowledge, docs, gaps, viewer }: { leaver: Leav
         </section>
       </div>
     </div>
-    <section className="home-card workstream-card"><div className="home-card-head"><div><span className="eyebrow">{viewer === "maya" ? "Your workstreams" : "Maya's workstreams"}</span><h3>{viewer === "maya" ? "Context to hand over" : "Projects to pick up"}</h3></div><span className="home-range">{knowledge.length} linked items</span></div><div className="workstream-lanes">{Array.from(new Set(docs.map((doc) => doc.path.split("/")[0]))).slice(0, 4).map((project) => { const count = knowledge.filter((item) => item.sources.some((source) => docs.find((doc) => doc.id === source.document_id)?.path.startsWith(project))).length; return <div className="workstream-lane" key={project}><span className="lane-icon">✦</span><div><b>{project}</b><small>{count} knowledge items · {docs.filter((doc) => doc.path.startsWith(project)).length} sources</small></div><span className="lane-arrow">→</span></div>; })}</div></section>
+    <section className="home-card workstream-card"><div className="home-card-head"><div><span className="eyebrow">{viewer === "maya" ? "Your workstreams" : "Maya's workstreams"}</span><h3>{viewer === "maya" ? "Context to hand over" : "Projects to pick up"}</h3></div><span className="home-range">{knowledge.length} linked items</span></div><div className="workstream-lanes">{workstreams.map(({ project, count }) => <div className="workstream-lane" key={project}><span className="lane-icon">✦</span><div><b>{project}</b><small>{count} knowledge items · {docs.filter((doc) => doc.path.startsWith(project)).length} sources</small></div><span className="lane-arrow">→</span></div>)}</div></section>
   </div>;
 }
 
