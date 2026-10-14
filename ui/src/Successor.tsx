@@ -6,14 +6,23 @@ import { Graph } from "./Graph";
 import type { Doc, Gap, Knowledge, Leaver } from "./types";
 import { COLORS, LINK_LABELS, colorOf, labelOf } from "./theme";
 
-interface Props { leaver: Leaver; successor: string; knowledge: Knowledge[]; gaps: Gap[]; docs: Doc[]; onBack: () => void }
+interface Props { leaver: Leaver; successor: string; viewer?: "ben" | "maya"; knowledge: Knowledge[]; gaps: Gap[]; docs: Doc[]; onBack: () => void }
 
-type Tab = "ask" | "map" | "connect";
-const TABS: [Tab, string][] = [["ask", "Ask"], ["map", "Knowledge map"], ["connect", "Use in your AI tools"]];
+type Tab = "home" | "ask" | "map" | "companies" | "connect";
+const TABS: [Tab, string, string][] = [
+  ["home", "Home", "⌂"],
+  ["ask", "Ask", "✦"],
+  ["map", "Knowledge map", "◎"],
+  ["companies", "Companies", "◌"],
+  ["connect", "Use in your AI tools", "↗"],
+];
 
-export function Successor({ leaver, successor, knowledge, gaps, docs, onBack }: Props) {
+export function Successor({ leaver, successor, viewer = "ben", knowledge, gaps, docs, onBack }: Props) {
   const params = new URLSearchParams(location.search);
-  const [tab, setTabState] = useState<Tab>(TABS.some(([t]) => t === params.get("tab")) ? (params.get("tab") as Tab) : "ask");
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    try { return localStorage.getItem("handover.theme") === "light" ? "light" : "dark"; } catch { return "dark"; }
+  });
+  const [tab, setTabState] = useState<Tab>(TABS.some(([t]) => t === params.get("tab")) ? (params.get("tab") as Tab) : "home");
   const [selected, setSelected] = useState<string | null>(params.get("node"));
   const [messages, setMessages] = useState<Message[]>([]);
   const [query, setQuery] = useState("");
@@ -29,6 +38,7 @@ export function Successor({ leaver, successor, knowledge, gaps, docs, onBack }: 
   const told = asked.filter((g) => g.status === "answered" && g.answer)
     .sort((a, b) => Number(!!b.demo_hint) - Number(!!a.demo_hint) || b.priority - a.priority);
   const first = leaver.name.split(" ")[0];
+  const navTabs = TABS.map(([tabId, label, icon]) => [tabId, viewer === "maya" && tabId === "ask" ? "Leave a note" : label, icon] as [Tab, string, string]);
 
   const setTab = (t: Tab) => {
     setTabState(t);
@@ -36,25 +46,51 @@ export function Successor({ leaver, successor, knowledge, gaps, docs, onBack }: 
     url.searchParams.set("tab", t);
     history.replaceState(null, "", url);
   };
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    try { localStorage.setItem("handover.theme", next); } catch { /* private mode: keep the current choice for this visit */ }
+  };
 
   return (
-    <>
+    <div className={`successor-shell theme-${theme}`}>
       <section className="succ">
-        <header className="succ-head">
-          <button className="back-link" onClick={onBack}><span>←</span> Back to home</button>
-          <div className="succ-title">
-            <h1>{first}'s handover</h1>
-            <span className="succ-stats">{leaver.documents} documents read · {knowledge.length} things {first} knows · {answers.length} answers from {first}</span>
-          </div>
-        </header>
-        <nav className="succ-tabs" role="tablist">
-          {TABS.map(([t, label]) => (
-            <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-              {label}{t === "connect" && <span className="pill-new">MCP</span>}
-            </button>
-          ))}
-        </nav>
-        <div className="succ-body">
+        <div className="succ-layout">
+          <aside className="succ-nav">
+            <div className="succ-nav-brand">Hand<i>over</i></div>
+            <div className="succ-nav-person"><span className="succ-avatar">{viewer === "maya" ? "M" : "B"}</span><span><b>{viewer === "maya" ? leaver.name : successor}</b><small>{viewer === "maya" ? "Handing over" : "Taking over"}</small></span></div>
+            <div className="succ-nav-label">Workspace</div>
+            <nav role="tablist" aria-label="Handover workspace">
+              {navTabs.map(([t, label, icon]) => (
+                <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
+                  <span className="succ-nav-icon">{icon}</span><span>{label}</span>{t === "connect" && <span className="pill-new">MCP</span>}
+                </button>
+              ))}
+            </nav>
+            <button className="succ-nav-home" onClick={onBack}>← Back to people</button>
+            <div className="succ-nav-foot"><span className="status-dot" /> Synced from Drive<br /><small>{leaver.documents} documents · Gemini reviewed</small></div>
+          </aside>
+          <section className="succ-content">
+            <header className="succ-head">
+              <div>
+                <div className="succ-breadcrumb">{viewer === "maya" ? "Your handover" : "Ben's workspace"} / {tab === "home" ? "Overview" : navTabs.find(([t]) => t === tab)?.[1]}</div>
+                <div className="succ-title">
+                  <h1>{tab === "home" ? (viewer === "maya" ? "Your handover" : `${first}'s work`) : navTabs.find(([t]) => t === tab)?.[1]}</h1>
+                  <span className="succ-stats">{viewer === "maya" ? `${leaver.documents} sources prepared · ${knowledge.length} context items · ${gaps.filter((gap) => gap.status === "open").length} questions to complete` : `${leaver.documents} documents read · ${knowledge.length} things ${first} knows · ${answers.length} answers from ${first}`}</span>
+                </div>
+              </div>
+              <div className="succ-head-actions">
+                <div className="perspective-copy"><small>Viewing as</small><b>{viewer === "maya" ? first : successor}</b><span>{viewer === "maya" ? `Handover assigned to ${successor}` : `Taking handover from ${first}`}</span></div>
+                <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
+                  <span className="theme-toggle-icon">{theme === "dark" ? "☼" : "☾"}</span>
+                  <span>{theme === "dark" ? "Light" : "Dark"}</span>
+                </button>
+                <button className="perspective-switch" onClick={() => { location.href = viewer === "maya" ? "?as=successor&preview=1" : "?as=leaver"; }}>{viewer === "maya" ? "View Ben's workspace" : "View Maya's workspace"}</button>
+                <div className="succ-live"><span className="status-dot" /> Live workspace</div>
+              </div>
+            </header>
+            <div className="succ-body">
+          {tab === "home" && <HomeDashboard leaver={leaver} knowledge={knowledge} docs={docs} gaps={gaps} viewer={viewer} />}
           {tab === "ask" && <Ask leaver={leaver} successor={successor} knowledge={knowledge} gaps={gaps} documents={leaver.documents} messages={messages} setMessages={setMessages} onSelect={setSelected} />}
           {tab === "map" && (
             <div className="graph-wrap">
@@ -80,7 +116,10 @@ export function Successor({ leaver, successor, knowledge, gaps, docs, onBack }: 
               </div>
             </div>
           )}
+          {tab === "companies" && <CompaniesDashboard knowledge={knowledge} docs={docs} viewer={viewer} />}
           {tab === "connect" && <Connect leaver={leaver} successor={successor} />}
+            </div>
+          </section>
         </div>
       </section>
 
@@ -132,8 +171,56 @@ export function Successor({ leaver, successor, knowledge, gaps, docs, onBack }: 
           </div>
         )}
       </aside>}
-    </>
+    </div>
   );
+}
+
+function HomeDashboard({ leaver, knowledge, docs, gaps, viewer }: { leaver: Leaver; knowledge: Knowledge[]; docs: Doc[]; gaps: Gap[]; viewer: "ben" | "maya" }) {
+  const [timelineMode, setTimelineMode] = useState<"past" | "upcoming">("past");
+  const today = new Date();
+  const daysLeft = Math.max(0, Math.ceil((new Date(`${leaver.last_day}T23:59:59`).getTime() - today.getTime()) / 86400000));
+  const since = new Date(today.getTime() - 30 * 86400000);
+  const pastTimeline = docs
+    .filter((doc) => doc.modified_at && new Date(doc.modified_at) >= since)
+    .sort((a, b) => new Date(b.modified_at ?? 0).getTime() - new Date(a.modified_at ?? 0).getTime());
+  const upcoming = knowledge.filter((item) => item.due && new Date(`${item.due}T23:59:59`) >= today)
+    .sort((a, b) => (a.due ?? "").localeCompare(b.due ?? "")).slice(0, 4);
+  const timeline = timelineMode === "past" ? pastTimeline : upcoming.map((item) => ({ id: item.id, title: item.title, path: item.owner ?? "Upcoming work", kind: "due", modified_at: item.due, url: null, author: item.owner, extracted: true }));
+  const notes = knowledge.filter((item) => item.type === "unfinished" || item.working_notes).slice(0, 3);
+  const openGaps = gaps.filter((gap) => gap.status === "open").length;
+  const readiness = Math.round(((knowledge.length + docs.length) / Math.max(1, knowledge.length + docs.length + openGaps)) * 100);
+  const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value)) : "";
+
+  return <div className="home-dashboard">
+    <div className="home-greeting"><div><span className="eyebrow">{viewer === "maya" ? "Your handover workspace" : "Maya's transition overview"}</span><h2>{viewer === "maya" ? "Make the context useful for Ben." : "Keep Maya's context close."}</h2><p>{viewer === "maya" ? "Review what you have done, add the context only you can provide, and leave Ben a clear path forward." : "Everything you need to pick up Maya's work, grounded in what she left behind."}</p></div><span className="home-date">{today.toLocaleDateString("en", { weekday: "long", month: "short", day: "numeric" })}</span></div>
+    <div className="home-metrics">
+      <div className="home-metric accent"><small>{viewer === "maya" ? "Days to prepare" : "Days until Maya leaves"}</small><strong>{daysLeft}</strong><span>{viewer === "maya" ? `Last day · ${formatDate(leaver.last_day)}` : `Maya's last day · ${formatDate(leaver.last_day)}`}</span></div>
+      <div className="home-metric"><small>{viewer === "maya" ? "Sources you have shared" : "Documents from Maya"}</small><strong>{leaver.documents}</strong><span>Drive + Calendar sources</span></div>
+      <div className="home-metric"><small>{viewer === "maya" ? "Context captured" : "Maya's knowledge"}</small><strong>{knowledge.length}</strong><span>Decisions, rules & work</span></div>
+      <div className="home-metric readiness-metric"><small>{viewer === "maya" ? "Handover readiness" : "Ready to pick up"}</small><strong>{readiness}%</strong><span>{openGaps ? (viewer === "maya" ? `${openGaps} questions for you` : `${openGaps} gaps to clarify`) : "No open questions"}</span><i style={{ width: `${readiness}%` }} /></div>
+    </div>
+    <div className="home-grid">
+      <section className="home-card timeline-card"><div className="home-card-head"><div><span className="eyebrow">{viewer === "maya" ? "Your activity" : "Maya's activity"}</span><h3>{timelineMode === "past" ? (viewer === "maya" ? "Your past month" : "What Maya has been doing") : (viewer === "maya" ? "Your upcoming handover work" : "What Ben needs to pick up")}</h3></div><div className="timeline-toggle"><button className={timelineMode === "past" ? "on" : ""} onClick={() => setTimelineMode("past")}>Past month</button><button className={timelineMode === "upcoming" ? "on" : ""} onClick={() => setTimelineMode("upcoming")}>Upcoming</button></div></div>
+        {timeline.length ? <div className="timeline">{timeline.map((doc) => <div className="timeline-item" key={doc.id}><span className="timeline-dot" /><div><small>{formatDate(doc.modified_at)} · {doc.kind}</small><b>{doc.title}</b><p>{doc.path}</p></div></div>)}</div> : <div className="home-empty">No dated activity found.</div>}
+      </section>
+      <div className="home-side-stack">
+        <section className="home-card"><div className="home-card-head"><div><span className="eyebrow">{viewer === "maya" ? "Prepare Ben" : "Next up"}</span><h3>{viewer === "maya" ? "Handover milestones" : "Upcoming work"}</h3></div><span className="home-arrow">↗</span></div>
+          {upcoming.length ? <div className="upcoming-list">{upcoming.map((item) => <div className="upcoming-item" key={item.id}><span className="calendar-badge">{item.due?.slice(8, 10)}</span><div><b>{item.title}</b><small>{formatDate(item.due)}{item.owner ? ` · ${item.owner}` : ""}</small></div></div>)}</div> : <div className="home-empty">No dated upcoming work found.</div>}
+        </section>
+        <section className="home-card"><div className="home-card-head"><div><span className="eyebrow">{viewer === "maya" ? "Your context" : "Left for you"}</span><h3>{viewer === "maya" ? "Notes to leave for Ben" : "Notes Maya left"}</h3></div><span className="home-arrow">✦</span></div>
+          {notes.length ? <div className="notes-list">{notes.map((item) => <div className="note-item" key={item.id}><span className="note-mark" /><div><b>{item.title}</b><p>{item.working_notes || item.details}</p></div></div>)}</div> : <div className="home-empty">{viewer === "maya" ? "Add the context Ben will need before your last day." : "Maya did not leave any open notes."}</div>}
+        </section>
+      </div>
+    </div>
+    <section className="home-card workstream-card"><div className="home-card-head"><div><span className="eyebrow">{viewer === "maya" ? "Your workstreams" : "Maya's workstreams"}</span><h3>{viewer === "maya" ? "Context to hand over" : "Projects to pick up"}</h3></div><span className="home-range">{knowledge.length} linked items</span></div><div className="workstream-lanes">{Array.from(new Set(docs.map((doc) => doc.path.split("/")[0]))).slice(0, 4).map((project) => { const count = knowledge.filter((item) => item.sources.some((source) => docs.find((doc) => doc.id === source.document_id)?.path.startsWith(project))).length; return <div className="workstream-lane" key={project}><span className="lane-icon">✦</span><div><b>{project}</b><small>{count} knowledge items · {docs.filter((doc) => doc.path.startsWith(project)).length} sources</small></div><span className="lane-arrow">→</span></div>; })}</div></section>
+  </div>;
+}
+
+function CompaniesDashboard({ knowledge, docs, viewer }: { knowledge: Knowledge[]; docs: Doc[]; viewer: "ben" | "maya" }) {
+  const companies = knowledge.filter((item) => item.kind === "organisation");
+  const fallback = Array.from(new Set(knowledge.flatMap((item) => item.who))).slice(0, 8).map((name) => ({ id: name, title: name, details: "Mentioned across Maya's handover context.", sources: knowledge.filter((item) => item.who.includes(name)).flatMap((item) => item.sources), due: null }));
+  const entries = companies.length ? companies : fallback;
+  return <div className="companies-dashboard"><div className="companies-intro"><span className="eyebrow">{viewer === "maya" ? "Your context layer" : "Maya's context layer"}</span><h2>{viewer === "maya" ? "Companies in your work." : "Companies Maya worked with."}</h2><p>{viewer === "maya" ? "Review the organizations and projects that need context before you hand over." : "See the organizations, projects, and next actions connected to Maya's handover."}</p></div><div className="company-grid">{entries.map((company) => <article className="company-card" key={company.id}><div className="company-logo">{company.title.slice(0, 1)}</div><div className="company-card-top"><span className="company-status">Connected context</span><span className="home-arrow">↗</span></div><h3>{company.title}</h3><p>{company.details}</p><div className="company-meta"><span>{company.sources.length} source{company.sources.length === 1 ? "" : "s"}</span><span>{knowledge.filter((item) => item.sources.some((source) => company.sources.some((own) => own.document_id === source.document_id))).length} linked items</span></div></article>)}</div></div>;
 }
 
 /** One piece of evidence up front; any more fold away. */

@@ -8,10 +8,10 @@ interface Props {
   leaver: Leaver; gaps: Gap[]; knowledge: Knowledge[]; docs: Doc[];
   onAnswered: (g: Gap) => void; onSubmit: () => Promise<void>;
   onBack: () => void; onRestart: () => Promise<void>; onRefresh: () => Promise<void>;
-  onOpenSuccessor: () => void;
+  onOpenSuccessor: () => void; onPreviewSuccessor: () => void;
 }
 
-export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit, onBack, onRestart, onRefresh, onOpenSuccessor }: Props) {
+export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit, onBack, onRestart, onRefresh, onOpenSuccessor, onPreviewSuccessor }: Props) {
   const [mode, setMode] = useState<"written" | "interview">("written");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -56,7 +56,14 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
     <div className={`leaver-page ${mode === "interview" ? "video-mode" : ""}`}>
       <div className="page-nav">
         <button className="back-link" onClick={onBack}><span>←</span> Back to home</button>
-        <button className="restart-link" onClick={() => setRestartOpen((open) => !open)}>Restart handover</button>
+        <div>
+          <button className="restart-link" onClick={onPreviewSuccessor}>Preview dashboard</button>
+          <button className="restart-link" onClick={() => setRestartOpen((open) => !open)}>Restart handover</button>
+        </div>
+      </div>
+      <div className="perspective-banner maya-perspective">
+        <div><small>Viewing as</small><b>{leaver.name}</b><span>Handover assigned to Ben Ong</span></div>
+        <button className="perspective-switch" onClick={onPreviewSuccessor}>Preview Maya's dashboard →</button>
       </div>
       {restartOpen && <div className="restart-panel">
         <div><b>Start this handover again?</b><span>This deletes the submitted handover, clears every saved answer, and removes generated follow-up questions.</span></div>

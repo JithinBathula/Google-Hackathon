@@ -12,7 +12,7 @@ const LEAVER_ID = "maya-tan";
 const SUCCESSOR = "Ben Ong";
 const INTRO_SEEN = "handover.introSeen";
 
-type View = "intro" | "landing" | "leaver" | "successor" | "ben-intro";
+type View = "intro" | "landing" | "leaver" | "leaver-preview" | "successor" | "successor-preview" | "ben-intro";
 
 function introSeen(): boolean {
   try { return localStorage.getItem(INTRO_SEEN) === "1"; } catch { return false; }
@@ -24,8 +24,9 @@ function markIntroSeen() {
 
 export default function App() {
   const requested = new URLSearchParams(location.search).get("as");
+  const preview = new URLSearchParams(location.search).get("preview") === "1";
   const [view, setView] = useState<View>(
-    requested === "leaver" ? "leaver" : requested === "successor" || requested === "onboarder" ? "successor" : introSeen() ? "landing" : "intro",
+    requested === "leaver" && preview ? "leaver-preview" : requested === "leaver" ? "leaver" : preview && (requested === "successor" || requested === "onboarder") ? "successor-preview" : requested === "successor" || requested === "onboarder" ? "successor" : introSeen() ? "landing" : "intro",
   );
   const [leaver, setLeaver] = useState<Leaver | null>(null);
   const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
@@ -55,7 +56,11 @@ export default function App() {
     setView(next);
     const url = new URL(location.href);
     if (next === "landing" || next === "intro" || next === "ben-intro") url.searchParams.delete("as");
+    else if (next === "successor-preview") url.searchParams.set("as", "successor");
+    else if (next === "leaver-preview") url.searchParams.set("as", "leaver");
     else url.searchParams.set("as", next);
+    if (next === "successor-preview" || next === "leaver-preview") url.searchParams.set("preview", "1");
+    else url.searchParams.delete("preview");
     history.replaceState(null, "", url);
   };
   const submit = async () => {
@@ -81,11 +86,11 @@ export default function App() {
     <div className="app">
       <WhosWho />
       <main className={"main " + view + (view === "successor" && leaver.handover.status !== "complete" ? " gated" : "")}>
-        {view === "successor"
-          ? leaver.handover.status === "complete"
-            ? <Successor leaver={leaver} successor={SUCCESSOR} knowledge={knowledge} gaps={gaps} docs={docs} onBack={() => choose("landing")} />
-            : <SuccessorGate leaver={leaver} gaps={gaps} onBack={() => choose("landing")} onSwitch={() => choose("leaver")} />
-          : <LeaverView leaver={leaver} gaps={gaps} knowledge={knowledge} docs={docs} onBack={() => choose("landing")} onRestart={restart} onRefresh={load} onSubmit={submit} onOpenSuccessor={() => choose("ben-intro")} onAnswered={(g) => setGaps((all) => all.map((x) => (x.id === g.id ? g : x)))} />}
+        {view === "successor" || view === "successor-preview" || view === "leaver-preview"
+          ? view === "successor-preview" || view === "leaver-preview" || leaver.handover.status === "complete"
+            ? <Successor leaver={leaver} successor={SUCCESSOR} viewer={view === "leaver-preview" ? "maya" : "ben"} knowledge={knowledge} gaps={gaps} docs={docs} onBack={() => choose("landing")} />
+            : <SuccessorGate leaver={leaver} gaps={gaps} successorName={SUCCESSOR} onBack={() => choose("landing")} onSwitch={() => choose("leaver")} />
+          : <LeaverView leaver={leaver} gaps={gaps} knowledge={knowledge} docs={docs} onBack={() => choose("landing")} onRestart={restart} onRefresh={load} onSubmit={submit} onOpenSuccessor={() => choose("ben-intro")} onPreviewSuccessor={() => choose("leaver-preview")} onAnswered={(g) => setGaps((all) => all.map((x) => (x.id === g.id ? g : x)))} />}
       </main>
     </div>
   );

@@ -68,13 +68,17 @@ export function Landing({ leaver, gaps, successorName, onChoose, onReplay }: Pro
   );
 }
 
-export function SuccessorGate({ leaver, gaps, onBack, onSwitch }: { leaver: Leaver; gaps: Gap[]; onBack: () => void; onSwitch: () => void }) {
+export function SuccessorGate({ leaver, gaps, successorName, onBack, onSwitch }: { leaver: Leaver; gaps: Gap[]; successorName: string; onBack: () => void; onSwitch: () => void }) {
   const questions = gaps.filter((gap) => gap.status !== "dropped");
   const answered = questions.filter((gap) => gap.status === "answered").length;
   const reviewing = leaver.handover.status === "reviewing";
 
   return (
     <div className="gate-page">
+      <div className="perspective-banner gate-perspective">
+        <div><small>Viewing as</small><b>{successorName}</b><span>Taking handover from {leaver.name}</span></div>
+        <button className="perspective-switch" onClick={onSwitch}>View {leaver.name.split(" ")[0]}'s workspace →</button>
+      </div>
       <div className="gate-mark" aria-hidden="true"><span /><span /><span /></div>
       <div className="eyebrow">Onboarding workspace locked</div>
       <h1>{reviewing ? "The handover is being reviewed." : `Ask ${leaver.name.split(" ")[0]} to complete the handover.`}</h1>
