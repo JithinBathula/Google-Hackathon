@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Gap, Leaver } from "./types";
 
 interface Props {
@@ -6,6 +7,36 @@ interface Props {
   successorName: string;
   onChoose: (role: "leaver" | "successor") => void;
   onReplay: () => void;
+}
+
+export function HandoverFrom({ leaver, successorName, onBack, onNext }: { leaver: Leaver; successorName: string; onBack: () => void; onNext: () => void }) {
+  const [selected, setSelected] = useState(false);
+
+  return (
+    <main className="handover-from-page">
+      <div className="landing-orbit orbit-one" />
+      <div className="landing-orbit orbit-two" />
+      <header className="landing-top">
+        <div className="wordmark">Hand<i>over</i></div>
+        <button className="intro-replay" onClick={onBack}>← Back to people</button>
+      </header>
+      <section className="handover-from-content" aria-labelledby="handover-from-title">
+        <div className="eyebrow">Your onboarding workspace</div>
+        <h1 id="handover-from-title">Who are you taking the handover from?</h1>
+        <p>Select the person whose work and context you’re about to pick up.</p>
+        <button className={`handover-person-tile${selected ? " selected" : ""}`} onClick={() => setSelected(true)} aria-pressed={selected}>
+          <span className="handover-person-avatar">M</span>
+          <span className="handover-person-copy"><small>Handover from</small><strong>{leaver.name}</strong><span>Knowledge, projects, and unfinished work</span></span>
+          <span className="handover-person-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+        </button>
+      </section>
+      <div className={`handover-next-bar${selected ? " visible" : ""}`}>
+        <span>{selected ? `Taking over from ${leaver.name}` : "Choose a profile to continue"}</span>
+        <button className="btn primary" disabled={!selected} onClick={onNext}>Next <i>→</i></button>
+      </div>
+      <footer className="landing-foot">You’ll open {successorName}’s workspace with no questions required.</footer>
+    </main>
+  );
 }
 
 export function Landing({ leaver, gaps, successorName, onChoose, onReplay }: Props) {

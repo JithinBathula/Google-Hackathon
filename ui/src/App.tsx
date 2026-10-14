@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { BenIntro } from "./BenIntro";
 import { Intro } from "./Intro";
-import { Landing, SuccessorGate } from "./Landing";
+import { HandoverFrom, Landing, SuccessorGate } from "./Landing";
 import { LeaverView } from "./LeaverView";
 import { Successor } from "./Successor";
 import type { Doc, Gap, Knowledge, Leaver } from "./types";
@@ -12,7 +12,7 @@ const LEAVER_ID = "maya-tan";
 const SUCCESSOR = "Ben Ong";
 const INTRO_SEEN = "handover.introSeen";
 
-type View = "intro" | "landing" | "leaver" | "leaver-preview" | "successor" | "successor-preview" | "ben-intro";
+type View = "intro" | "landing" | "handover-from" | "leaver" | "leaver-preview" | "successor" | "successor-preview" | "ben-intro";
 
 function introSeen(): boolean {
   try { return localStorage.getItem(INTRO_SEEN) === "1"; } catch { return false; }
@@ -26,7 +26,7 @@ export default function App() {
   const requested = new URLSearchParams(location.search).get("as");
   const preview = new URLSearchParams(location.search).get("preview") === "1";
   const [view, setView] = useState<View>(
-    requested === "leaver" && preview ? "leaver-preview" : requested === "leaver" ? "leaver" : preview && (requested === "successor" || requested === "onboarder") ? "successor-preview" : requested === "successor" || requested === "onboarder" ? "successor" : introSeen() ? "landing" : "intro",
+    requested === "leaver" && preview ? "leaver-preview" : requested === "leaver" ? "leaver" : requested === "successor" && new URLSearchParams(location.search).get("select") === "1" ? "handover-from" : preview && (requested === "successor" || requested === "onboarder") ? "successor-preview" : requested === "successor" || requested === "onboarder" ? "successor" : introSeen() ? "landing" : "intro",
   );
   const [leaver, setLeaver] = useState<Leaver | null>(null);
   const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
@@ -56,11 +56,13 @@ export default function App() {
     setView(next);
     const url = new URL(location.href);
     if (next === "landing" || next === "intro" || next === "ben-intro") url.searchParams.delete("as");
+    else if (next === "handover-from") { url.searchParams.set("as", "successor"); url.searchParams.set("select", "1"); }
     else if (next === "successor-preview") url.searchParams.set("as", "successor");
     else if (next === "leaver-preview") url.searchParams.set("as", "leaver");
     else url.searchParams.set("as", next);
     if (next === "successor-preview" || next === "leaver-preview") url.searchParams.set("preview", "1");
     else url.searchParams.delete("preview");
+    if (next !== "handover-from") url.searchParams.delete("select");
     history.replaceState(null, "", url);
   };
   const submit = async () => {
@@ -81,7 +83,8 @@ export default function App() {
     const url = new URL(location.href); url.searchParams.set("tab", tab); history.replaceState(null, "", url);
     choose("successor");
   }} />;
-  if (view === "landing") return <><Landing leaver={leaver} gaps={gaps} successorName={SUCCESSOR} onChoose={choose} onReplay={() => choose("intro")} /><WhosWho /></>;
+  if (view === "landing") return <><Landing leaver={leaver} gaps={gaps} successorName={SUCCESSOR} onChoose={(role) => choose(role === "successor" ? "handover-from" : "leaver")} onReplay={() => choose("intro")} /><WhosWho /></>;
+  if (view === "handover-from") return <HandoverFrom leaver={leaver} successorName={SUCCESSOR} onBack={() => choose("landing")} onNext={() => choose("successor-preview")} />;
   return (
     <div className="app">
       <WhosWho />
