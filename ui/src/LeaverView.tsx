@@ -2,17 +2,25 @@ import { useState } from "react";
 import { api } from "./api";
 import type { Doc, Gap, Knowledge, Leaver } from "./types";
 import { Memory } from "./Memory";
+import { Shell } from "./Shell";
 import { VideoInterview } from "./VideoInterview";
 
 interface Props {
   leaver: Leaver; gaps: Gap[]; knowledge: Knowledge[]; docs: Doc[];
   onAnswered: (g: Gap) => void; onSubmit: () => Promise<void>;
   onBack: () => void; onRestart: () => Promise<void>; onRefresh: () => Promise<void>;
-  onOpenSuccessor: () => void; onPreviewSuccessor: () => void;
+  onOpenSuccessor: () => void;
 }
 
-export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit, onBack, onRestart, onRefresh, onOpenSuccessor, onPreviewSuccessor }: Props) {
-  const [mode, setMode] = useState<"written" | "interview">("written");
+export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit, onBack, onRestart, onRefresh, onOpenSuccessor }: Props) {
+  type Mode = "written" | "interview";
+  const [mode, setModeState] = useState<Mode>(new URLSearchParams(location.search).get("mode") === "interview" ? "interview" : "written");
+  const setMode = (next: Mode) => {
+    setModeState(next);
+    const url = new URL(location.href);
+    url.searchParams.set("mode", next);
+    history.replaceState(null, "", url);
+  };
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
@@ -52,33 +60,33 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
     finally { setRestarting(false); }
   };
 
+  const modes = [
+    { id: "written", label: "Written questions", icon: "✎" },
+    { id: "interview", label: "Offboarding interview", icon: "◉", pill: "New" },
+  ];
+  const greeting = open.length
+    ? `Hi ${first}, please answer ${open.length === steps.length ? `these ${open.length} questions` : `the ${open.length} open ${open.length === 1 ? "question" : "questions"}`}.`
+    : `Thanks, ${first}. That's everything.`;
+
   return (
+    <Shell
+      person={{ initial: first[0], name: leaver.name, role: "Handing over" }}
+      items={modes} active={mode} onSelect={(id) => setMode(id as Mode)} onBack={onBack}
+      foot={<><span className="status-dot" /> Synced from Drive<br /><small>{leaver.documents} documents read</small></>}
+      breadcrumb={`${first}'s workspace / ${mode === "written" ? "Written questions" : "Offboarding interview"}`}
+      title={mode === "written" ? greeting : "Offboarding interview"}
+      sub={mode === "written" ? `Your handover · ${steps.length - open.length} of ${steps.length} answered` : "Talk it through with Ari"}
+      actions={<button className="restart-link" onClick={() => setRestartOpen((open) => !open)}>Restart handover</button>}
+    >
     <div className={`leaver-page ${mode === "interview" ? "video-mode" : ""}`}>
-      <div className="page-nav">
-        <button className="back-link" onClick={onBack}><span>←</span> Back to home</button>
-        <div>
-          <button className="restart-link" onClick={onPreviewSuccessor}>Preview dashboard</button>
-          <button className="restart-link" onClick={() => setRestartOpen((open) => !open)}>Restart handover</button>
-        </div>
-      </div>
-      <div className="perspective-banner maya-perspective">
-        <div><small>Viewing as</small><b>{leaver.name}</b><span>Handover assigned to Ben Ong</span></div>
-        <button className="perspective-switch" onClick={onPreviewSuccessor}>Preview Maya's dashboard →</button>
-      </div>
       {restartOpen && <div className="restart-panel">
         <div><b>Start this handover again?</b><span>This deletes the submitted handover, clears every saved answer, and removes generated follow-up questions.</span></div>
         <label>Type <strong>restart</strong> to confirm<input autoFocus value={restartText} onChange={(event) => setRestartText(event.target.value)} placeholder="restart" /></label>
         {restartError && <span className="form-error">{restartError}</span>}
         <div className="restart-actions"><button className="btn" onClick={() => { setRestartOpen(false); setRestartText(""); }}>Cancel</button><button className="btn danger" disabled={restartText.trim().toLowerCase() !== "restart" || restarting} onClick={restart}>{restarting ? "Restarting…" : "Restart"}</button></div>
       </div>}
-      <nav className="offboarding-tabs" aria-label="Offboarding format">
-        <button className={mode === "written" ? "active" : ""} onClick={() => setMode("written")}><span>✎</span><div><b>Written questions</b><small>Answer at your own pace</small></div></button>
-        <button className={mode === "interview" ? "active" : ""} onClick={() => setMode("interview")}><span>◉</span><div><b>Offboarding interview</b><small>Talk it through with Ari</small></div><i>New</i></button>
-      </nav>
       {mode === "interview" ? <VideoInterview leaver={leaver} gaps={gaps} knowledge={knowledge} docs={docs} onRefresh={onRefresh} onSubmit={onSubmit} onOpenSuccessor={onOpenSuccessor} /> : <>
       {leaver.handover.status === "needs_answers" && open.length > 0 && <div className="review-note"><b>The final check added {open.length} follow-up {open.length === 1 ? "question" : "questions"}.</b><span>Answer {open.length === 1 ? "it" : "them"}, then submit again.</span></div>}
-      <div className="quiz-kicker">Your handover · {steps.length - open.length} of {steps.length} answered</div>
-      <h1>{open.length ? `Hi ${first}, please answer ${open.length === steps.length ? `these ${open.length} questions` : `the ${open.length} open ${open.length === 1 ? "question" : "questions"}`}.` : `Thanks, ${first}. That's everything.`}</h1>
       <div className="stepper" role="tablist" aria-label="Questions">
         {steps.map((g, i) => <button key={g.id} role="tab" aria-selected={i === current} aria-label={`Question ${i + 1}`} className={`${g.status === "answered" ? "done" : ""} ${i === current ? "on" : ""}`} onClick={() => setStep(i)}>{g.status === "answered" ? "✓" : i + 1}</button>)}
       </div>
@@ -101,6 +109,7 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
         </>}
       </>}
     </div>
+    </Shell>
   );
 }
 

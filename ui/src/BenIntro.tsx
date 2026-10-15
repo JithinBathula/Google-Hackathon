@@ -1,7 +1,7 @@
 import { PersonCard, Scene, SlideDeck } from "./Slides";
 import type { Gap, Knowledge, Leaver } from "./types";
 
-export type SuccessorTab = "ask" | "map" | "connect";
+export type SuccessorTab = "home" | "ask" | "map" | "connect";
 
 const SCENES = ["Saved", "Now you're Ben", "Three ways"];
 
@@ -15,7 +15,7 @@ const WAYS: { tab: SuccessorTab; title: string; what: string; example: string }[
 export function BenIntro({ leaver, knowledge, gaps, onOpen }: { leaver: Leaver; knowledge: Knowledge[]; gaps: Gap[]; onOpen: (tab: SuccessorTab) => void }) {
   const first = leaver.name.split(" ")[0];
   const answered = gaps.filter((gap) => gap.status === "answered").length;
-  return <SlideDeck names={SCENES} doneLabel="Open Ben's page" onDone={() => onOpen("ask")} skipLabel="Skip to Ben's page" onSkip={() => onOpen("ask")} render={(at) => <>
+  return <SlideDeck names={SCENES} doneLabel="Open Ben's page" onDone={() => onOpen("home")} skipLabel="Skip to Ben's page" onSkip={() => onOpen("home")} render={(at) => <>
     {at === "Saved" && <Scene
       eyebrow="Handover complete"
       title={<>Everything {first} knew is <em>saved.</em></>}
