@@ -19,6 +19,7 @@ interface Island { group: string; x: number; y: number; w: number; h: number; co
 export interface MapProps {
   knowledge: Knowledge[]; gaps: Gap[]; query: string;
   selected: string | null; onSelect: (id: string | null) => void;
+  theme?: "dark" | "light";
   /** false while the other map view is showing: the canvas keeps its layout but stops animating */
   active?: boolean;
 }
@@ -52,7 +53,7 @@ export function usePauseWhenHidden(ref: { current?: { pauseAnimation(): unknown;
   }, [active, ref]);
 }
 
-export function Graph({ knowledge, gaps, query, selected, onSelect, active = true }: MapProps) {
+export function Graph({ knowledge, gaps, query, selected, onSelect, active = true, theme = "dark" }: MapProps) {
   const ref = useRef<ForceGraphMethods<GNode, GLink>>();
   const { box, size } = useBoxSize();
   usePauseWhenHidden(ref, active);
@@ -123,6 +124,9 @@ export function Graph({ knowledge, gaps, query, selected, onSelect, active = tru
   const lit = (id: string) => (matches ? matches.has(id) : !focus || id === focus || near!.has(id));
   const touches = (l: GLink) => end(l.source) === focus || end(l.target) === focus;
   const colorAt = (v: unknown) => (v as GNode).color ?? "#ffffff";
+  const graphColors = theme === "light"
+    ? { link: "rgba(38,57,82,0.16)", dimLink: "rgba(38,57,82,0.045)", text: "rgba(23,32,51,0.88)", muted: "rgba(99,112,134,0.88)", island: "#ffffff", focus: "rgba(215,146,24,0.9)", particle: "#d79218", outline: "rgba(42,126,220,0.18)" }
+    : { link: "rgba(255,255,255,0.08)", dimLink: "rgba(255,255,255,0.02)", text: "rgba(236,233,226,0.88)", muted: "rgba(154,152,163,0.8)", island: "#141419", focus: "rgba(233,180,76,0.85)", particle: "#e9b44c", outline: "rgba(255,255,255,0.08)" };
 
   return (
     <div className="graph-canvas"><div ref={box} className="graph-fill">
@@ -139,13 +143,13 @@ export function Graph({ knowledge, gaps, query, selected, onSelect, active = tru
         minZoom={0.3} maxZoom={4}
         nodeLabel={(n) => ((n as GNode).label.length > 30 ? (n as GNode).label : "")}
         linkCurvature={0.25}
-        linkColor={(l) => (focus && touches(l as GLink) ? "rgba(233,180,76,0.85)" : focus || matches ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.08)")}
+        linkColor={(l) => (focus && touches(l as GLink) ? graphColors.focus : focus || matches ? graphColors.dimLink : graphColors.link)}
         linkWidth={(l) => (focus && touches(l as GLink) ? 1.6 : 0.7)}
         // every link carries a slow spark in its source's colour; the focused item's links run faster and gold
         linkDirectionalParticles={(l) => (focus ? (touches(l as GLink) ? 3 : 0) : matches ? 0 : 1)}
         linkDirectionalParticleSpeed={(l) => (focus && touches(l as GLink) ? 0.012 : 0.0035)}
         linkDirectionalParticleWidth={(l) => (focus && touches(l as GLink) ? 3 : 2)}
-        linkDirectionalParticleColor={(l) => (focus && touches(l as GLink) ? "#e9b44c" : colorAt((l as GLink).source) + "cc")}
+        linkDirectionalParticleColor={(l) => (focus && touches(l as GLink) ? graphColors.particle : colorAt((l as GLink).source) + "cc")}
         onNodeHover={(n) => { setHover(n ? (n as GNode).id : null); if (box.current) box.current.style.cursor = n ? "pointer" : "grab"; }}
         onNodeClick={(n) => onSelect((n as GNode).id === selected ? null : (n as GNode).id)}
         onBackgroundClick={() => onSelect(null)}
@@ -153,15 +157,15 @@ export function Graph({ knowledge, gaps, query, selected, onSelect, active = tru
           for (const isl of islands) {
             const c = COLORS[isl.group];
             ctx.beginPath(); ctx.roundRect(isl.x, isl.y, isl.w, isl.h, 14);
-            ctx.fillStyle = "rgba(255,255,255,0.022)"; ctx.fill();
+            ctx.fillStyle = graphColors.outline; ctx.fill();
             ctx.strokeStyle = c + "26"; ctx.lineWidth = 1; ctx.stroke();
             ctx.beginPath(); ctx.arc(isl.x + PAD + 4, isl.y + PAD + 9, 4, 0, 2 * Math.PI); ctx.fillStyle = c; ctx.fill();
             ctx.font = "600 11px Inter, sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
-            ctx.fillStyle = "rgba(236,233,226,0.88)";
+            ctx.fillStyle = graphColors.text;
             const title = ISLAND_TITLES[isl.group].toUpperCase();
             ctx.fillText(title, isl.x + PAD + 14, isl.y + PAD + 9.5);
             const tw = ctx.measureText(title).width;
-            ctx.font = "11px Inter, sans-serif"; ctx.fillStyle = "rgba(154,152,163,0.8)";
+            ctx.font = "11px Inter, sans-serif"; ctx.fillStyle = graphColors.muted;
             ctx.fillText(String(isl.count), isl.x + PAD + 22 + tw, isl.y + PAD + 9.5);
           }
         }}
@@ -171,7 +175,7 @@ export function Graph({ knowledge, gaps, query, selected, onSelect, active = tru
           const on = lit(n.id), isFocus = n.id === focus || n.id === selected;
           ctx.globalAlpha = on ? 1 : 0.22;
           ctx.beginPath(); ctx.roundRect(x, y, PILL_W, PILL_H, PILL_H / 2);
-          ctx.fillStyle = "#141419"; ctx.fill();
+          ctx.fillStyle = graphColors.island; ctx.fill();
           ctx.fillStyle = n.color + (isFocus ? "40" : "17"); ctx.fill();
           ctx.strokeStyle = n.color + (isFocus ? "ff" : "4d"); ctx.lineWidth = isFocus ? 1.5 : 1; ctx.stroke();
           // the dot breathes, each one slightly out of step with the next
@@ -192,7 +196,7 @@ export function Graph({ knowledge, gaps, query, selected, onSelect, active = tru
             ctx.fillText(d, x + right, y + PILL_H / 2 + 0.5); right -= ctx.measureText(d).width + 8;
           }
           ctx.font = `${isFocus ? 500 : 400} 11.5px Inter, sans-serif`; ctx.textAlign = "left";
-          ctx.fillStyle = "rgba(236,233,226,0.94)";
+          ctx.fillStyle = graphColors.text;
           ctx.fillText(fit(ctx, n.label, right - 26), x + 26, y + PILL_H / 2 + 0.5);
           ctx.globalAlpha = 1;
         }}

@@ -27,7 +27,7 @@ function shorten(title: string): string {
   return short.length > 34 ? short.slice(0, 33).trimEnd() + "…" : short;
 }
 
-export function Constellation({ knowledge, gaps, query, selected, onSelect, active = true }: MapProps) {
+export function Constellation({ knowledge, gaps, query, selected, onSelect, active = true, theme = "dark" }: MapProps) {
   const ref = useRef<ForceGraphMethods<Star, Line>>();
   const { box, size } = useBoxSize();
   usePauseWhenHidden(ref, active);
@@ -38,7 +38,7 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
   const data = useMemo(() => {
     const answered = answeredIds(gaps);
     const groups = ORDER.filter((g) => knowledge.some((k) => groupOf(k) === g));
-    const nodes: Star[] = [{ id: CENTER, kind: "center", label: "", short: "", color: "#e9b44c", group: "", phase: 0, r: 26, side: 1, hx: 0, hy: 0, w: 0, fx: 0, fy: 0, count: knowledge.length }];
+    const nodes: Star[] = [{ id: CENTER, kind: "center", label: "", short: "", color: theme === "light" ? "#d79218" : "#e9b44c", group: "", phase: 0, r: 26, side: 1, hx: 0, hy: 0, w: 0, fx: 0, fy: 0, count: knowledge.length }];
     const links: Line[] = [];
     groups.forEach((g, gi) => {
       const a = -Math.PI / 2 + (gi / groups.length) * 2 * Math.PI;
@@ -65,7 +65,7 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
     const ids = new Set(knowledge.map((k) => k.id));
     for (const k of knowledge) for (const l of k.links) if (ids.has(l.target_id) && l.target_id !== k.id) links.push({ source: k.id, target: l.target_id, kind: "link", dist: 220 });
     return { nodes, links };
-  }, [knowledge, gaps]);
+  }, [knowledge, gaps, theme]);
 
   const byId = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data]);
   const neighbours = useMemo(() => {
@@ -179,6 +179,9 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
     return focusNode ? t === `__hub_${focusNode.group}` : false;
   };
   const dim = (l: Line) => !!(focus || matches) && !lineLit(l);
+  const skyColors = theme === "light"
+    ? { focus: "rgba(215,146,24,0.9)", link: "rgba(38,57,82,0.12)", dimLink: "rgba(38,57,82,0.035)", center: "#ffffff", hub: "#f8fbff", text: "rgba(23,32,51,0.92)", muted: "rgba(99,112,134,0.95)", outline: "rgba(42,126,220,0.2)", halo: "rgba(243,246,251,0.9)" }
+    : { focus: "rgba(233,180,76,0.85)", link: "rgba(190,200,255,0.07)", dimLink: "rgba(255,255,255,0.015)", center: "#121217", hub: "#15151c", text: "rgba(236,233,226,0.92)", muted: "rgba(154,152,163,0.95)", outline: "rgba(233,180,76,0.9)", halo: "rgba(12,12,16,0.9)" };
 
   return (
     <div className="graph-canvas"><div ref={box} className="graph-fill">
@@ -198,8 +201,8 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
         nodeLabel={(n) => ((n as Star).kind === "item" && (n as Star).short !== (n as Star).label ? (n as Star).label : "")}
         linkColor={(l) => {
           const line = l as Line, color = byId.get(end(line.target))?.color ?? "#ffffff";
-          if (lineLit(line)) return "rgba(233,180,76,0.85)";
-          if (line.kind === "link") return dim(line) ? "rgba(255,255,255,0.015)" : "rgba(190,200,255,0.07)";
+          if (lineLit(line)) return skyColors.focus;
+          if (line.kind === "link") return dim(line) ? skyColors.dimLink : skyColors.link;
           return color + (dim(line) ? "14" : line.kind === "spine" ? "70" : "50");
         }}
         linkWidth={(l) => (lineLit(l as Line) ? 1.6 : (l as Line).kind === "spine" ? 1.2 : (l as Line).kind === "spoke" ? 0.8 : 0.5)}
@@ -208,7 +211,7 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
         linkDirectionalParticles={(l) => (lineLit(l as Line) ? 3 : dim(l as Line) ? 0 : (l as Line).kind === "link" ? 0 : 1)}
         linkDirectionalParticleSpeed={(l) => (lineLit(l as Line) ? 0.012 : (l as Line).kind === "spine" ? 0.003 : 0.005)}
         linkDirectionalParticleWidth={(l) => (lineLit(l as Line) ? 2.6 : 1.8)}
-        linkDirectionalParticleColor={(l) => (lineLit(l as Line) ? "#e9b44c" : (byId.get(end((l as Line).target))?.color ?? "#ffffff") + "dd")}
+        linkDirectionalParticleColor={(l) => (lineLit(l as Line) ? skyColors.focus : (byId.get(end((l as Line).target))?.color ?? "#ffffff") + "dd")}
         onNodeHover={(n) => { const s = n as Star | null; setHover(s?.kind === "item" ? s.id : null); if (box.current) box.current.style.cursor = s?.kind === "item" ? "pointer" : "grab"; }}
         onNodeClick={(n) => { const s = n as Star; if (s.kind === "item") onSelect(s.id === selected ? null : s.id); }}
         onNodeDragEnd={(n) => { if ((n as Star).kind !== "center") { n.fx = undefined; n.fy = undefined; } }}
@@ -244,20 +247,20 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
 
           if (n.kind === "center") {
             const glow = ctx.createRadialGradient(x, y, 0, x, y, 120);
-            glow.addColorStop(0, "rgba(233,180,76,0.32)"); glow.addColorStop(1, "rgba(233,180,76,0)");
+            glow.addColorStop(0, theme === "light" ? "rgba(215,146,24,0.24)" : "rgba(233,180,76,0.32)"); glow.addColorStop(1, theme === "light" ? "rgba(215,146,24,0)" : "rgba(233,180,76,0)");
             ctx.globalAlpha = 0.85 + 0.15 * Math.sin(t * 0.9);
             ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, 120, 0, 2 * Math.PI); ctx.fill();
             ctx.globalAlpha = 1;
-            ctx.beginPath(); ctx.arc(x, y, n.r, 0, 2 * Math.PI); ctx.fillStyle = "#121217"; ctx.fill();
-            ctx.strokeStyle = "rgba(233,180,76,0.9)"; ctx.lineWidth = 2; ctx.stroke();
-            ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#ece9e2";
+            ctx.beginPath(); ctx.arc(x, y, n.r, 0, 2 * Math.PI); ctx.fillStyle = skyColors.center; ctx.fill();
+            ctx.strokeStyle = skyColors.outline; ctx.lineWidth = 2; ctx.stroke();
+            ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = skyColors.text;
             ctx.font = `italic 20px "Instrument Serif", Georgia, serif`; ctx.fillText("Maya", x, y - 3);
-            ctx.font = "600 6.5px Inter, sans-serif"; ctx.fillStyle = "rgba(154,152,163,0.95)"; ctx.fillText(`${n.count} THINGS`, x, y + 11);
+            ctx.font = "600 6.5px Inter, sans-serif"; ctx.fillStyle = skyColors.muted; ctx.fillText(`${n.count} THINGS`, x, y + 11);
           } else if (n.kind === "hub") {
             const glow = ctx.createRadialGradient(x, y, 0, x, y, n.r * 3.2);
             glow.addColorStop(0, n.color + "66"); glow.addColorStop(1, n.color + "00");
             ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, n.r * 3.2, 0, 2 * Math.PI); ctx.fill();
-            ctx.beginPath(); ctx.arc(x, y, n.r, 0, 2 * Math.PI); ctx.fillStyle = "#15151c"; ctx.fill();
+            ctx.beginPath(); ctx.arc(x, y, n.r, 0, 2 * Math.PI); ctx.fillStyle = skyColors.hub; ctx.fill();
             ctx.fillStyle = n.color + "30"; ctx.fill();
             ctx.strokeStyle = n.color; ctx.lineWidth = 1.4; ctx.stroke();
             ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -271,7 +274,7 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
             ctx.globalAlpha = alpha;
             if (n.answered) { ctx.beginPath(); ctx.arc(x, y, n.r + 2.6, 0, 2 * Math.PI); ctx.strokeStyle = n.color + "cc"; ctx.lineWidth = 1; ctx.stroke(); }
             ctx.beginPath(); ctx.arc(x, y, n.r, 0, 2 * Math.PI); ctx.fillStyle = n.color; ctx.fill();
-            ctx.beginPath(); ctx.arc(x, y, n.r * 0.42, 0, 2 * Math.PI); ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.fill();
+            ctx.beginPath(); ctx.arc(x, y, n.r * 0.42, 0, 2 * Math.PI); ctx.fillStyle = theme === "light" ? "rgba(38,57,82,0.9)" : "rgba(255,255,255,0.9)"; ctx.fill();
           }
           ctx.globalAlpha = 1;
         }}
@@ -286,7 +289,7 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
             if (n.kind === "center") continue;
             const on = lit(n), isFocus = n.id === focus || n.id === selected, x = n.x ?? 0, y = n.y ?? 0;
             ctx.globalAlpha = on ? 1 : 0.16;
-            ctx.strokeStyle = "rgba(12,12,16,0.9)"; ctx.lineWidth = 4;
+            ctx.strokeStyle = skyColors.halo; ctx.lineWidth = 4;
             if (n.kind === "hub") {
               ctx.font = `700 ${px(10)}px Inter, sans-serif`; ctx.textAlign = "center";
               const title = n.label.toUpperCase().split("").join(String.fromCharCode(8202));
@@ -299,7 +302,7 @@ export function Constellation({ knowledge, gaps, query, selected, onSelect, acti
             const gap = n.r + 6, nameW = ctx.measureText(name).width;
             ctx.textAlign = n.side > 0 ? "left" : "right";
             const nx = x + gap * n.side;
-            ctx.strokeText(name, nx, y); ctx.fillStyle = isFocus ? "#ffffff" : "rgba(236,233,226,0.92)"; ctx.fillText(name, nx, y);
+            ctx.strokeText(name, nx, y); ctx.fillStyle = isFocus ? (theme === "light" ? "#172033" : "#ffffff") : skyColors.text; ctx.fillText(name, nx, y);
             if (due) {
               ctx.font = `600 ${px(10.5)}px Inter, sans-serif`;
               const dx = nx + (nameW + 6) * n.side;
