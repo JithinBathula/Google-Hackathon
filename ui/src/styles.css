@@ -881,3 +881,17 @@ details.evidence summary { cursor: pointer; color: var(--dim); font-size: 12px; 
 
 /* Ben's page: the side panel only opens when something is selected */
 .main.successor:not(:has(> .side)) { grid-template-columns: 1fr; }
+
+/* Demo help on the written questions page: save every prepared answer at once */
+.fill-all { margin-left: auto; display: inline-flex; align-items: center; gap: 12px; }
+.stepper .fill-all-btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 18px; border-radius: 999px; background: var(--accent); color: var(--bg); border: 1px solid var(--accent); font-size: 14px; font-weight: 600; box-shadow: 0 0 0 4px rgba(233,180,76,0.18), 0 6px 20px rgba(233,180,76,0.35); animation: fill-all-glow 1.8s ease-in-out infinite; }
+.stepper .fill-all-btn:hover { background: #f0c15f; border-color: #f0c15f; color: var(--bg); transform: translateY(-1px); }
+.stepper .fill-all-btn:disabled { animation: none; box-shadow: none; }
+.stepper .fill-all-btn i { font-style: normal; }
+.fill-all .form-error { display: inline; margin-top: 0; }
+@keyframes fill-all-glow {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(233,180,76,0.18), 0 6px 20px rgba(233,180,76,0.35); }
+  50% { box-shadow: 0 0 0 8px rgba(233,180,76,0.08), 0 6px 26px rgba(233,180,76,0.55); }
+}
+.skip-speech { margin-top: 18px; color: var(--text); }
+.skip-speech span { color: var(--muted); }

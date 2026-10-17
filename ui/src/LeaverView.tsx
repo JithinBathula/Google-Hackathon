@@ -27,6 +27,8 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
   const [restartText, setRestartText] = useState("");
   const [restarting, setRestarting] = useState(false);
   const [restartError, setRestartError] = useState<string | null>(null);
+  const [filling, setFilling] = useState(false);
+  const [fillError, setFillError] = useState<string | null>(null);
   // One question at a time. In demo mode the questions answered for the visitor come first, then the ones they
   // fill in, then any follow-ups from the final check. The order doesn't change as answers come in.
   const group = (g: Gap) => (g.id.startsWith("g-review-") ? 2 : g.demo_answer && !g.demo_hint ? 0 : 1);
@@ -42,6 +44,18 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
   const current = Math.min(step ?? (firstOpen === -1 ? steps.length : firstOpen), steps.length);
   const first = leaver.name.split(" ")[0];
   const docById = new Map(docs.map((d) => [d.id, d]));
+
+  // Demo help: the open questions that have a prepared answer, saved in one go so a visitor can skip to Ben's page
+  const fillable = open.filter((g) => g.demo_answer);
+  const fillAll = async () => {
+    setFilling(true); setFillError(null);
+    try {
+      const saved = await Promise.all(fillable.map((g) => api.answer(leaver.id, g.id, g.demo_answer!)));
+      saved.forEach(onAnswered);
+      setStep(steps.length);
+    } catch (e) { setFillError(e instanceof Error ? e.message : String(e)); }
+    finally { setFilling(false); }
+  };
 
   const submit = async () => {
     setSubmitting(true); setSubmitError(null);
@@ -89,6 +103,11 @@ export function LeaverView({ leaver, gaps, knowledge, docs, onAnswered, onSubmit
       {leaver.handover.status === "needs_answers" && open.length > 0 && <div className="review-note"><b>The final check added {open.length} follow-up {open.length === 1 ? "question" : "questions"}.</b><span>Answer {open.length === 1 ? "it" : "them"}, then submit again.</span></div>}
       <div className="stepper" role="tablist" aria-label="Questions">
         {steps.map((g, i) => <button key={g.id} role="tab" aria-selected={i === current} aria-label={`Question ${i + 1}`} className={`${g.status === "answered" ? "done" : ""} ${i === current ? "on" : ""}`} onClick={() => setStep(i)}>{g.status === "answered" ? "✓" : i + 1}</button>)}
+        {fillable.length > 0 && <span className="fill-all">
+          <span className="memory-tag">Demo help</span>
+          <button className="fill-all-btn" disabled={filling} onClick={fillAll}>{filling ? "Saving answers…" : `Fill in ${fillable.length === 1 ? "the last answer" : `all ${fillable.length} answers`}`}<i>→</i></button>
+          {fillError && <span className="form-error">{fillError}</span>}
+        </span>}
       </div>
       {current < steps.length
         ? <QuestionStep key={steps[current].id} gap={steps[current]} index={current} total={steps.length} openLeft={open.some((g) => g.id !== steps[current].id)} leaverId={leaver.id} docById={docById} first={first}

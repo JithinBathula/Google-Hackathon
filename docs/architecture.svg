@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <title>How Handover works</title>
+  <rect width="1200" height="520" rx="16" fill="#F6F8FB"/>
+
+  <text x="40" y="52" font-size="24" font-weight="700" fill="#0F172A">Handover</text>
+  <text x="40" y="80" font-size="14" fill="#475569">Documents say what. Only people know why. Handover captures the why before they leave.</text>
+
+  <!-- who -->
+  <g font-size="10" font-weight="700" letter-spacing="1.4" fill="#64748B">
+    <text x="40" y="106">THE LEAVER · BEFORE THEIR LAST DAY</text>
+    <text x="925" y="106">THE SUCCESSOR · AFTER</text>
+  </g>
+  <path d="M40,112 H875 M925,112 H1170" stroke="#CBD5E1" stroke-width="1"/>
+
+  <!-- cards -->
+  <g>
+    <rect x="40" y="130" width="245" height="270" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/>
+    <rect x="335" y="130" width="245" height="270" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/>
+    <rect x="630" y="130" width="245" height="270" rx="14" fill="#FFF7ED" stroke="#F59E0B" stroke-width="2"/>
+    <rect x="925" y="130" width="245" height="270" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/>
+  </g>
+
+  <!-- differentiator tag -->
+  <rect x="690.5" y="118" width="124" height="22" rx="11" fill="#F59E0B"/>
+  <text x="752.5" y="133" font-size="10" font-weight="700" letter-spacing="1.2" fill="#FFFFFF" text-anchor="middle">WHAT'S DIFFERENT</text>
+
+  <!-- step numbers -->
+  <g font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">
+    <circle cx="64" cy="154" r="11" fill="#475569"/><text x="64" y="158">1</text>
+    <circle cx="359" cy="154" r="11" fill="#475569"/><text x="359" y="158">2</text>
+    <circle cx="654" cy="154" r="11" fill="#D97706"/><text x="654" y="158">3</text>
+    <circle cx="949" cy="154" r="11" fill="#475569"/><text x="949" y="158">4</text>
+  </g>
+
+  <!-- icon 1: documents -->
+  <g transform="translate(134.5,160)">
+    <rect x="8" y="4" width="32" height="40" rx="4" fill="#E8F0FE" stroke="#4285F4" stroke-width="1.5"/>
+    <rect x="16" y="12" width="32" height="40" rx="4" fill="#FFFFFF" stroke="#4285F4" stroke-width="1.5"/>
+    <path d="M22,24 H42 M22,32 H42 M22,40 H34" stroke="#A8C7FA" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <!-- icon 2: document with a question -->
+  <g transform="translate(429.5,160)">
+    <rect x="12" y="4" width="32" height="44" rx="4" fill="#FFFFFF" stroke="#4285F4" stroke-width="1.5"/>
+    <path d="M18,16 H38 M18,24 H38 M18,32 H28" stroke="#A8C7FA" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="42" cy="42" r="11" fill="#F59E0B"/>
+    <text x="42" y="47" font-size="15" font-weight="700" fill="#FFFFFF" text-anchor="middle">?</text>
+  </g>
+  <!-- icon 3: microphone -->
+  <g transform="translate(724.5,160)">
+    <rect x="20" y="2" width="16" height="30" rx="8" fill="#F59E0B"/>
+    <path d="M12,22 a16,16 0 0 0 32,0" stroke="#B45309" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M28,38 V48 M20,48 H36" stroke="#B45309" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M4,14 q-5,8 0,16 M52,14 q5,8 0,16" stroke="#F59E0B" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- icon 4: answered chat -->
+  <g transform="translate(1019.5,160)">
+    <rect x="4" y="8" width="48" height="32" rx="10" fill="#E8F0FE" stroke="#4285F4" stroke-width="1.5"/>
+    <path d="M14,39 L10,50 L24,39" fill="#E8F0FE" stroke="#4285F4" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M18,24 l7,7 l13,-13" stroke="#4285F4" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- titles and subtitles -->
+  <g text-anchor="middle">
+    <text x="162.5" y="250" font-size="18" font-weight="700" fill="#0F172A">Read their work</text>
+    <text x="162.5" y="274" font-size="13" fill="#475569">Drive and Calendar,</text>
+    <text x="162.5" y="292" font-size="13" fill="#475569">with the leaver's consent</text>
+
+    <text x="457.5" y="250" font-size="18" font-weight="700" fill="#0F172A">Find the gaps</text>
+    <text x="457.5" y="274" font-size="13" fill="#475569">Gemini finds each decision</text>
+    <text x="457.5" y="292" font-size="13" fill="#475569">with no reason written down</text>
+
+    <text x="752.5" y="250" font-size="18" font-weight="700" fill="#0F172A">Ask them why</text>
+    <text x="752.5" y="274" font-size="13" fill="#475569">An AI interviewer asks by voice,</text>
+    <text x="752.5" y="292" font-size="13" fill="#475569">and keeps asking until it's clear</text>
+
+    <text x="1047.5" y="250" font-size="18" font-weight="700" fill="#0F172A">Hand it over</text>
+    <text x="1047.5" y="274" font-size="13" fill="#475569">A chat with sources, a map,</text>
+    <text x="1047.5" y="292" font-size="13" fill="#475569">and the successor's own AI tools</text>
+  </g>
+
+  <!-- one example, all the way through -->
+  <g font-size="12" font-style="italic" fill="#334155" text-anchor="middle">
+    <rect x="52" y="324" width="221" height="52" rx="8" fill="#F1F5F9"/>
+    <text x="162.5" y="345">“Supplier: Acme.</text>
+    <text x="162.5" y="363">Approved by the director.”</text>
+
+    <rect x="347" y="324" width="221" height="52" rx="8" fill="#F1F5F9"/>
+    <text x="457.5" y="345">“Why Acme, when another</text>
+    <text x="457.5" y="363">bid was cheaper?”</text>
+
+    <rect x="642" y="324" width="221" height="52" rx="8" fill="#FDE8C8"/>
+    <text x="752.5" y="345">“The other one missed our deadline</text>
+    <text x="752.5" y="363">last year. Never again.”</text>
+
+    <rect x="937" y="324" width="221" height="52" rx="8" fill="#F1F5F9"/>
+    <text x="1047.5" y="345">“Can I switch suppliers?”</text>
+    <text x="1047.5" y="363">“No, and here's what happened.”</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#94A3B8" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M304,257 L316,265 L304,273"/>
+    <path d="M599,257 L611,265 L599,273"/>
+    <path d="M894,257 L906,265 L894,273"/>
+  </g>
+
+  <!-- stack -->
+  <text x="40" y="470" font-size="10" font-weight="700" letter-spacing="1.4" fill="#1E7E34">RUNS ON GOOGLE CLOUD</text>
+  <g font-size="12" fill="#0F172A" text-anchor="middle">
+    <rect x="215" y="450" width="90" height="32" rx="16" fill="#E6F4EA" stroke="#A8DAB5"/><text x="260" y="470">Cloud Run</text>
+    <rect x="320" y="450" width="230" height="32" rx="16" fill="#E6F4EA" stroke="#A8DAB5"/><text x="435" y="470">Vertex AI · Gemini 3.8 Flash + TTS</text>
+    <rect x="565" y="450" width="86" height="32" rx="16" fill="#E6F4EA" stroke="#A8DAB5"/><text x="608" y="470">Firestore</text>
+    <rect x="666" y="450" width="122" height="32" rx="16" fill="#E6F4EA" stroke="#A8DAB5"/><text x="727" y="470">Secret Manager</text>
+  </g>
+</svg>

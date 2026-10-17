@@ -43,27 +43,35 @@ export function VideoInterview({ leaver, gaps, knowledge, docs, onRefresh, onSub
     return () => { autoRef.current = false; activeAudio.current?.pause(); stopSpeech.current?.(); };
   }, [leaver.id]);
 
+  // Ari says the text out loud. Resolves when the audio ends, or at once when skipSpeech() cuts it short,
+  // which also works while the audio is still being generated.
   const speak = async (text: string) => {
     if (!text.trim()) return;
     activeAudio.current?.pause();
     setAvatarMode("thinking"); setTalking(true); setSpoken("");
+    let skipped = false;
+    stopSpeech.current = () => { skipped = true; };
     try {
       const blob = await api.speakInterview(leaver.id, text);
+      if (skipped) return;
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       activeAudio.current = audio;
       setAvatarMode("speaking"); setSpoken(text);
       await new Promise<void>((resolve) => {
         const done = () => { URL.revokeObjectURL(url); stopSpeech.current = null; resolve(); };
-        stopSpeech.current = done;
+        stopSpeech.current = () => { audio.pause(); done(); };
         audio.onended = done;
         audio.onerror = done;
         audio.play().catch(done);
       });
     } finally {
+      stopSpeech.current = null;
       setAvatarMode("idle"); setTalking(false);
     }
   };
+  // The leaver has heard enough: stop Ari and go straight to the answer box
+  const skipSpeech = () => stopSpeech.current?.();
 
   const start = async () => {
     setBusy(true); setError(null); setNotice("Gemini is arranging your work into a conversation…");
@@ -220,6 +228,7 @@ export function VideoInterview({ leaver, gaps, knowledge, docs, onRefresh, onSub
               <span>Ari is getting ready to speak…</span>
               <div className="ari-skeleton"><i /><i /><i /></div>
             </div>}
+            {talking && <button className="btn wide-control skip-speech" onClick={skipSpeech}>Start answering<span>→</span></button>}
             {!auto && !busy && <button className="btn primary wide-control" onClick={() => setAutoMode(true)}>Continue the interview<span>▶</span></button>}
           </> : <div className="asking-in">
             <span className="chapter-label">Question {interview.current_item + 1} of {interview.timeline.length}</span>
