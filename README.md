@@ -7,9 +7,8 @@ Entry for the [Google Cloud AI Builder Cup 2026](https://aibuildercup.com), them
 | | |
 |---|---|
 | **Live app** | https://handover-239830814657.asia-southeast1.run.app |
-| **Demo video** | `[PLACEHOLDER: public link, under 3:00]` |
-| **Deck (PDF)** | `[PLACEHOLDER: link]` |
-| **Team** | `[PLACEHOLDER: team name and members]` |
+| **Demo video** | https://www.youtube.com/watch?v=k5ECYUIr2Ag |
+| **Team** | Team STUDS: Jithin Bathula, Priyanshi Saraogi, Sahitya Pettugani |
 
 ![The successor's chat: a question about a past decision, answered from the handover with the reason the leaver gave in person, and the six records it drew on shown as sources](docs/screenshots/landing.png)
 
@@ -62,15 +61,7 @@ Models: `gemini-3.8-flash` and `gemini-3.8-flash-tts`, called through Vertex AI 
 
 Two storage layers keep every merged fact traceable to a quote: raw per-document extractions are never edited, and the merged layer everything reads is rebuilt from them. Details: [docs/tech/knowledge-model.md](docs/tech/knowledge-model.md).
 
-## Impact, measured on the sample workspace
-
-| Measure | Value |
-|---|---|
-| Sources read | 8 Drive files plus 14 calendar events |
-| Knowledge records extracted and linked | 34 records, 49 links |
-| Questions the documents could not answer, raised for the leaver | 12 |
-| Reasons deliberately left out of the sample documents, recovered by the interview | 4 of 4 |
-| A cited answer for the successor, end to end on the live service | about 7 s, first words streamed in about 2 s |
+## Differentiators and Future Improvments
 
 **What is different:** existing tools summarise or search documents. Handover starts from what the documents *should* say but do not, and takes those questions to the one person who can answer them before they are gone.
 
@@ -90,6 +81,6 @@ Every API route, CLI command and the one-time Cloud project setup: [app/README.m
 
 No secrets are committed: the OAuth secret lives in Secret Manager, local keys in a gitignored `.env`. All demo data is synthetic and every person and company in it is fictional.
 
-## Team and licence
+## Licence
 
-`[PLACEHOLDER: names and roles]` · `[PLACEHOLDER: licence, and add a LICENSE file]`
+[MIT](LICENSE).

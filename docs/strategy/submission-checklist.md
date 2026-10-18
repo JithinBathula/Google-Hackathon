@@ -22,7 +22,7 @@
 - [ ] **Public GitHub repo** includes:
   - [ ] a README with the problem, architecture diagram, tech stack, setup and deploy steps
   - [ ] no secrets or `.env` files
-  - [ ] a licence
+  - [x] a licence
 - [ ] **Demo video** is strictly under 3:00 (aim for 2:45), on a public YouTube, Vimeo or Drive link, and the link works when logged out
 - [ ] **Deck (PDF)** covers:
   - [ ] problem and target users
